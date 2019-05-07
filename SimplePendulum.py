@@ -7,12 +7,15 @@ import time
 
 import yaml
 from shapely.geometry import Point, Polygon, LineString, box
-from environment import Environment, plot_environment, plot_line, plot_poly
+from colorama import Fore, Style
 
+#print(f'This is {Fore.GREEN} color {Style.RESET_ALL}!')
 
-
-TIMESTEP = 0.1
+TIMESTEP = 0.05
 GRAVITY  = 9.81
+MAX_ITER = 5000
+PLOTS = True
+
 class SimplePendulum(SearchNode):
 
   def __init__(self,
@@ -82,10 +85,14 @@ class SimplePendulum(SearchNode):
     dq0, dq1 = calcF(u)
     self.state = (self.state[0]+dq1*self.dt,self.state[1] + dq1 * self.dt)
 
+  #######################################
+  # SimplePendulum ######################
+  #######################################
+ 
 
-###
-###
-###
+#######################################
+#######################################
+#######################################
 def plotListOfTuples(ax,tupleList):
   for i in range(len(tupleList)-1):
     x = tupleList[i][0], tupleList[i+1][0]
@@ -118,9 +125,10 @@ def steerPendulum(node_nearest, node_rand):
   tmax = node_nearest.max_torque
   if not node_nearest.iteration % 4:
     u = random.choice([-tmax,0,tmax]) # Random int. TODO this seems stupid. Must be based on node_rand? But works
-    node_nearest.iteration += 1
+    # node_nearest.iteration += 1
   else:
     u = node_nearest.u
+    # node_nearest.iteration += 1
 
   # u = random.choice([-tmax,0,tmax]) # Random int. TODO this seems stupid. Must be based on node_rand
   th, thdot = node_nearest.getStates()
@@ -136,13 +144,48 @@ def steerPendulum(node_nearest, node_rand):
 ###
 ###
 ###
+def steerPendulumRK4(node_nearest, node_rand):
+  '''
+  :params:  node_nearest is SimplePendulum object
+            node_rand is th,thdot values of random sampled point in state space
+  '''
+  tmax = node_nearest.max_torque
+  if not node_nearest.iteration % 4:
+    u = random.choice([-tmax,0,tmax]) # Random int. TODO this seems stupid. Must be based on node_rand? But works
+  else:
+    u = node_nearest.u
+
+  # u = random.choice([-tmax,0,tmax]) # Random int. TODO this seems stupid. Must be based on node_rand
+  x1, x2 = node_nearest.getStates()
+  thdot, thddot = node_nearest.calcF(u)
+  n_n = node_nearest
+
+  k11 = x2
+  k12 = u/(n_n.m*n_n.length**2)-n_n.g/(n_n.length)*sin(x1)
+
+  k21 = x2 + k12/2
+  k22 = u / (n_n.m*n_n.length**2) - n_n.g/(n_n.length)*sin(x1 + k11/2)
+
+  k31 = x2 + k22/2
+  k32 = u / (n_n.m*n_n.length**2) - n_n.g/(n_n.length)*sin(x1 + k21/2)
+
+  k41 = x2 + k32
+  k42 = u / (n_n.m*n_n.length**2) - n_n.g/(n_n.length)*sin(x1 + k31)
+
+  x1 = x1 + (k11+2*(k21+k31)+k41)*n_n.dt/6
+  x2 = x2 + (k12+2*(k22+k32)+k42)*n_n.dt/6
+
+  return (x1,x2), u
+
+###
+###
+###
 def plotPhaseplotGoal(ax,path,bounds,iterations):
   '''
   :params:  ax: matplotlib Axes-object
             path: list of tuples (th,thdot)
             bounds: tuple of (minx,miny,maxx,maxy)
             iterations: int of number of iterations RRT used
-
 
   '''
   plotListOfTuples(ax,path)
@@ -151,23 +194,41 @@ def plotPhaseplotGoal(ax,path,bounds,iterations):
   ax.set_ylim(bounds[1],bounds[3])
   ax.set_xlabel("Theta (rad)")
   ax.set_ylabel("Thetadot (rad/s)")
-  ax.set_title("Phaseplot of pendulum after %s iterations" % iterations)
+  ax.set_title("Phaseplot of goal path found after %s iterations" % iterations)
+  ax.set_aspect('equal', 'datalim')
 
 ###
 ###
 ###
-def plotPhaseplot(transitions,bounds):
+def plotPhaseplot(ax,transitions,bounds,portion=1):
     '''
-  :params:  transitions: a list of tuples of two lists:
+  :params:  ax: a matplotlib Axes object
+            transitions: a list of tuples of two lists:
             [ ([x1,x2],[y1,y2]), ([x3,x4],[y3,y4]), ... ]
             bounds: tuple of (minx,miny,maxx,maxy)
+            portion: a float between (0,1] that gives portion to plot
 
+            Takes some time to execute when iterations gets high!
   '''
-  ax = fig.add_subplot(1, 1, 1)
-  iters = len(transitions)
-  for i in range(iters):
-    ax.plot(transitions[i][0],transitions[i][1],lw=1)
-  ax.set_aspect('equal', 'datalim')
+    print("Plotting %0.1f"%(portion*100),"% of the RRT paths...")
+    stime =time.time()
+    iters = len(transitions)
+
+    ax.grid(True)
+    ax.set_xlim(bounds[0],bounds[2])
+    ax.set_ylim(bounds[1],bounds[3])
+    ax.set_xlabel("Theta (rad)")
+    ax.set_ylabel("Thetadot (rad/s)")
+    ax.set_title("Phaseplot of pendulum after %s iterations" % iters)   
+    
+    assert portion != 0.
+    everyIt = int(1 / portion)
+    for i in range(iters):
+      if not i % (everyIt):
+        ax.plot(transitions[i][0],transitions[i][1],lw=1)
+
+    ax.set_aspect('equal', 'datalim')
+    print("... Done after",time.time() - stime , "seconds")
 
 ###
 ###
@@ -222,8 +283,6 @@ def animatePendulum(goalPath):
   print("... Done after", time.time() - stime, "seconds")
 
 
-
-
 ###
 ###
 ###
@@ -258,6 +317,19 @@ def animatePhaseplot(transitions,bounds):
 ###
 ###
 ###
+def printRRT():
+  print(Fore.WHITE + Style.BRIGHT)
+  print('     ____________________________')
+  print('    /                           /\\ ')
+  print('   / '+Fore.RED+'RRT'+Fore.WHITE+' in'+'              /*    / /\\')
+  print('  /  '+Fore.BLUE+'Pyt'+Fore.YELLOW+'hon'+Fore.WHITE+'     _     ___|    / /\\')
+  print(' /           o_/ \___/       / /\\')
+  print('/___________________________/ /\\')
+  print('\___________________________\/\\')
+  print(' \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\'
+        + Style.RESET_ALL + Style.BRIGHT)
+  print(Fore.WHITE+ Style.RESET_ALL)
+
 def rrtPendulum(bounds,start_pos,radius,end_regions):
 
   '''
@@ -267,6 +339,7 @@ def rrtPendulum(bounds,start_pos,radius,end_regions):
   '''
 
   # Using set for now to see unique nodes sampled
+  printRRT()
   stime = time.time()
   nodes = set(start_pos)
   transitions = []
@@ -276,29 +349,28 @@ def rrtPendulum(bounds,start_pos,radius,end_regions):
   graph.add_node(SimplePendulum(start_pos))
   goalPath = Path(SimplePendulum(start_pos)) # in case of no path found
 
-  max_iter = 100000
-  for i in range(max_iter):
+  for i in range(MAX_ITER):
   
     if not (i%1000):
       n, d = nearestEuclSNode(graph, end_regions[0].centroid.coords[0])
-      print("Iteration", i,"\t ### Nearest to goal at +pi:", n.state)
+      print("Iteration", i,"\t ### Nearest +pi: ( %0.2f , %0.2f" % (n.state[0], n.state[1]),")")
 
+    # TODO: UNNECESSARY?
     rand_th = random.uniform(bounds[0],bounds[2])
     rand_thdot = random.uniform(bounds[1],bounds[3])
     node_rand = (rand_th,rand_thdot)
 
-    sampling_rate = max_iter # TODO: unused for now since steering is not active
+    sampling_rate = MAX_ITER # TODO: unused for now 
     if not(i % sampling_rate):
       node_rand = end_regions[0].centroid.coords[0]
 
     node_nearest, node_dist = nearestEuclSNode(graph, node_rand) 
+    steered_state, steered_u = steerPendulum(node_nearest, node_rand)
 
-    steered_node, steered_u = steerPendulum(node_nearest, node_rand)
-
-    if not (bounds[0] < steered_node[0] < bounds[2]) or not (bounds[1] < steered_node[1] < bounds[3]):
+    if not (bounds[0] < steered_state[0] < bounds[2]) or not (bounds[1] < steered_state[1] < bounds[3]):
       continue
 
-    node_steered = SimplePendulum(steered_node,node_nearest,node_nearest.cost+node_dist, u=steered_u)
+    node_steered = SimplePendulum(steered_state,node_nearest,node_nearest.cost+node_dist, u=steered_u)
 
     nodes.add(node_steered.state)
     graph.add_edge(node_nearest,node_steered,node_dist)
@@ -309,18 +381,14 @@ def rrtPendulum(bounds,start_pos,radius,end_regions):
       goalPath = Path(node_steered)
       break # break the while loop when solution is found!
 
-  if len(goalPath.path) == 1:
-    print("No paths found from", start_pos, "to end pos")
-  else:
-    print("Path found after",i,"iterations,",time.time()-stime,"seconds")
+  print("No paths found") if len(goalPath.path) == 1 else print("Path found after",i,"iterations and ",time.time()-stime,"seconds\n------> It takes the pendulum %0.2f"%(len(goalPath.path)*TIMESTEP) + "s to reach the top")
 
   return goalPath, nodes, i, transitions
 
 
 ###
+### Initializing 
 ###
-###
-
 
 radius = 0.1
 bounds = (-2*np.pi, -8, 2*np.pi, 8) # interesting plot if bounds are doubled!
@@ -332,17 +400,19 @@ end2 = Polygon(up2)
 # TODO: Decrease both TIMESTEP and the tuning of these endzones
 
 ends = [end1, end2]
-fig, ax = plt.subplots()
 goalPath, nodes, iters, trans = rrtPendulum(bounds,start,radius,ends)
-plotPhaseplotGoal(ax,goalPath.path,bounds,iters)
-plotPhaseplot(trans,bounds) 
 
-f, axarr = plt.subplots(3)
-plotGoalPathParameters(axarr,goalPath)
+if PLOTS:
+  fig, axarr = plt.subplots(1,2,sharey=True)
+  plotPhaseplotGoal(axarr[0],goalPath.path,bounds,iters)
+  
+  plotPhaseplot(axarr[1],trans,bounds,portion=0.7) 
 
-plt.show() if True else print("Finished. Chosen to show no plots")
+  f, axarr1 = plt.subplots(3)
+  plotGoalPathParameters(axarr1,goalPath)
+
+plt.show() if PLOTS else print("Finished. Chosen to show no plots")
 
 if False:
   # animatePendulum(goalPath)
   animatePhaseplot(trans,bounds)
-  plotPhaseplot(trans,bounds)

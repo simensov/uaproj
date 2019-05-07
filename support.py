@@ -600,13 +600,10 @@ def obstacleIsInPath(firstNode,nextNode,env,radius):
 
 def goalReached(node,radius,end_region):
     '''
-
     :params:    node is a tuple (xpos,ypos)
                 radius is a scalar - size of the robot
                 end_region is a polygon of four tuples drawn clockwise: lower left, upper left, upper right, lower right
     '''
-
-
     # returns a boolean for node tuple + radius inside the region
     return end_region.contains(Point(node))
 
