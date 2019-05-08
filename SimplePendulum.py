@@ -12,9 +12,10 @@ from colorama import Fore, Style
 #print(f'This is {Fore.GREEN} color {Style.RESET_ALL}!')
 
 TIMESTEP = 0.05
-GRAVITY  = 9.81
-MAX_ITER = 5000
+GRAVITY  = 9.8
+MAX_ITER = 30000
 PLOTS = True
+ANIMATE = False
 
 class SimplePendulum(SearchNode):
 
@@ -23,13 +24,13 @@ class SimplePendulum(SearchNode):
     parent_node = None,
     cost        = 0.0,
     u           = 0,
-    length      = 1,
+    length      = 0.5,
     mass        = 1,
-    max_torque  = 1,
+    max_torque  = 0.15,
     iteration   = 0,
     dt          = TIMESTEP,
     gravity     = GRAVITY,
-    damping     = 1):
+    damping     = 0.1):
 
     self.iteration = iteration
     self.max_torque = max_torque
@@ -68,7 +69,8 @@ class SimplePendulum(SearchNode):
     # From Underactuated notes: gives much better plots
     accel=-self.g*sin(self.state[0])/(self.length) + self.u/(self.m*self.length**2)
 
-    # secondDamped = accel - self.b*self.state[1]
+
+    accel = accel - self.b*self.state[1]
 
     return (vel,accel)
 
@@ -389,7 +391,6 @@ def rrtPendulum(bounds,start_pos,radius,end_regions):
 ###
 ### Initializing 
 ###
-
 radius = 0.1
 bounds = (-2*np.pi, -8, 2*np.pi, 8) # interesting plot if bounds are doubled!
 start = (0, 0)
@@ -397,6 +398,7 @@ upright1=[(np.pi*0.9,-0.1), (np.pi*0.9,0.1),(np.pi*1.1,0.1), (np.pi*1.1,-0.1)]
 end1 = Polygon(upright1)
 up2=[(-np.pi*0.9,-0.1), (-np.pi*0.9,0.1),(-np.pi*1.1,0.1), (-np.pi*1.1,-0.1)]
 end2 = Polygon(up2)
+
 # TODO: Decrease both TIMESTEP and the tuning of these endzones
 
 ends = [end1, end2]
@@ -405,14 +407,12 @@ goalPath, nodes, iters, trans = rrtPendulum(bounds,start,radius,ends)
 if PLOTS:
   fig, axarr = plt.subplots(1,2,sharey=True)
   plotPhaseplotGoal(axarr[0],goalPath.path,bounds,iters)
-  
-  plotPhaseplot(axarr[1],trans,bounds,portion=0.7) 
-
+  plotPhaseplot(axarr[1],trans,bounds,portion=1.0) 
   f, axarr1 = plt.subplots(3)
   plotGoalPathParameters(axarr1,goalPath)
 
 plt.show() if PLOTS else print("Finished. Chosen to show no plots")
 
-if False:
-  # animatePendulum(goalPath)
-  animatePhaseplot(trans,bounds)
+if ANIMATE:
+  animatePendulum(goalPath)
+  #animatePhaseplot(trans,bounds)
