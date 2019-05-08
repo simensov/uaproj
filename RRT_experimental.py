@@ -1,11 +1,9 @@
-# Useful imports
 from __future__ import division
 from matplotlib import pyplot as plt
 import numpy as np
 import yaml
 from shapely.geometry import Point, Polygon, LineString, box
 from environment import Environment, plot_environment, plot_line, plot_poly
-from check_path import check_path
 import time
 
 from support import *

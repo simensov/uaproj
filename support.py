@@ -4,6 +4,8 @@ import numpy as np
 from sklearn.neighbors import NearestNeighbors
 import scipy.interpolate as si
 
+from colorama import Fore, Style
+
 class SearchNode(object):
     def __init__(self,
                  state,
@@ -684,3 +686,22 @@ def plot_bspline(ax,x,y,bounds,sn=100):
     ax.axis("equal")    
     ax.set_xlim(xmin,xmax)
     ax.set_ylim(ymin,ymax)
+
+def plotListOfTuples(ax,tupleList):
+  for i in range(len(tupleList)-1):
+    x = tupleList[i][0], tupleList[i+1][0]
+    y = [tupleList[i][1], tupleList[i+1][1]]
+    ax.plot(x,y)
+
+def printRRT():
+  print(Fore.WHITE + Style.BRIGHT)
+  print('     ____________________________')
+  print('    /                           /\\ ')
+  print('   / '+Fore.RED+'RRT'+Fore.WHITE+' in'+'              /*    / /\\')
+  print('  /  '+Fore.BLUE+'Pyt'+Fore.YELLOW+'hon'+Fore.WHITE+'     _     ___|    / /\\')
+  print(' /           o_/ \___/       / /\\')
+  print('/___________________________/ /\\')
+  print('\___________________________\/\\')
+  print(' \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\'
+        + Style.RESET_ALL + Style.BRIGHT)
+  print(Fore.WHITE+ Style.RESET_ALL)

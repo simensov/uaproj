@@ -16,6 +16,9 @@ GRAVITY  = 9.8
 MAX_ITER = 30000
 PLOTS = True
 ANIMATE = False
+DAMPING = True
+
+np.random.seed()
 
 class SimplePendulum(SearchNode):
 
@@ -23,10 +26,10 @@ class SimplePendulum(SearchNode):
     state       = (0,0),
     parent_node = None,
     cost        = 0.0,
-    u           = 0,
+    u           = 0.0,
     length      = 0.5,
     mass        = 1,
-    max_torque  = 0.15,
+    max_torque  = 1.0,
     iteration   = 0,
     dt          = TIMESTEP,
     gravity     = GRAVITY,
@@ -67,10 +70,10 @@ class SimplePendulum(SearchNode):
     # From [Branicky, 2002: 'Nonlinear and Hybrid Control via RRTs']:
     #second=-3*self.g*sin(self.state[0])/(2*self.length) - 3*self.u/(self.m*self.length**2)
     # From Underactuated notes: gives much better plots
-    accel=-self.g*sin(self.state[0])/(self.length) + self.u/(self.m*self.length**2)
+    accel=-self.g*sin(self.state[0])/(self.length) + u/(self.m*self.length**2)
 
-
-    accel = accel - self.b*self.state[1]
+    if DAMPING:
+      accel = accel - self.b*self.state[1]
 
     return (vel,accel)
 
@@ -91,15 +94,6 @@ class SimplePendulum(SearchNode):
   # SimplePendulum ######################
   #######################################
  
-
-#######################################
-#######################################
-#######################################
-def plotListOfTuples(ax,tupleList):
-  for i in range(len(tupleList)-1):
-    x = tupleList[i][0], tupleList[i+1][0]
-    y = [tupleList[i][1], tupleList[i+1][1]]
-    ax.plot(x,y)
 
 ###
 ###
@@ -125,12 +119,15 @@ def steerPendulum(node_nearest, node_rand):
             node_rand is th,thdot values of random sampled point in state space
   '''
   tmax = node_nearest.max_torque
-  if not node_nearest.iteration % 4:
-    u = random.choice([-tmax,0,tmax]) # Random int. TODO this seems stupid. Must be based on node_rand? But works
-    # node_nearest.iteration += 1
+
+  u = 0
+  if not (node_nearest.iteration % 3):
+    u = random.choice( [-tmax,0,tmax]) # Random int. TODO this seems stupid. Must be based on node_rand? But works
+    node_nearest.iteration += 1
   else:
     u = node_nearest.u
-    # node_nearest.iteration += 1
+    node_nearest.iteration += 1
+
 
   # u = random.choice([-tmax,0,tmax]) # Random int. TODO this seems stupid. Must be based on node_rand
   th, thdot = node_nearest.getStates()
@@ -163,7 +160,7 @@ def steerPendulumRK4(node_nearest, node_rand):
   n_n = node_nearest
 
   k11 = x2
-  k12 = u/(n_n.m*n_n.length**2)-n_n.g/(n_n.length)*sin(x1)
+  k12 = u / (n_n.m*n_n.length**2) - n_n.g/(n_n.length)*sin(x1)
 
   k21 = x2 + k12/2
   k22 = u / (n_n.m*n_n.length**2) - n_n.g/(n_n.length)*sin(x1 + k11/2)
@@ -272,7 +269,7 @@ def animatePendulum(goalPath):
     ln, = ax.plot([0, sin(sol[i][0])],[0, -cos(sol[i][0])],
                   color='r', lw=2)
 
-    ln1, = ax.plot([sin(sol[i][0])],[-cos(sol[i][0])], marker='o', markersize=3, color="blue")
+    # ln1, = ax.plot([sin(sol[i][0])],[-cos(sol[i][0])], marker='o', markersize=3, color="blue")
 
     tm = ax.text(-1, 0.9, 'time = %.1fs' % ts[i])
     lns.append([ln, tm])
@@ -280,7 +277,7 @@ def animatePendulum(goalPath):
 
   ax.set_aspect('equal', 'datalim')
   ax.grid()
-  ani = animation.ArtistAnimation(fig, lns, interval=200) 
+  ani = animation.ArtistAnimation(fig, lns, interval=20,blit=True) 
   ani.save('pendulum_swingup_from_RRT.mp4', fps=15)
   print("... Done after", time.time() - stime, "seconds")
 
@@ -348,8 +345,8 @@ def rrtPendulum(bounds,start_pos,radius,end_regions):
 
   # Creating graph of SearchNodes / Simple Pendulum nodes
   graph = Graph()
-  graph.add_node(SimplePendulum(start_pos))
-  goalPath = Path(SimplePendulum(start_pos)) # in case of no path found
+  graph.add_node(SimplePendulum(start_pos,u=0.0))
+  goalPath = Path(SimplePendulum(start_pos,u=0.0)) # in case of no path found
 
   for i in range(MAX_ITER):
   
@@ -411,8 +408,8 @@ if PLOTS:
   f, axarr1 = plt.subplots(3)
   plotGoalPathParameters(axarr1,goalPath)
 
-plt.show() if PLOTS else print("Finished. Chosen to show no plots")
-
 if ANIMATE:
   animatePendulum(goalPath)
   #animatePhaseplot(trans,bounds)
+
+plt.show() if PLOTS else print("Finished. Chosen to show no plots")
