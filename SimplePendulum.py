@@ -14,9 +14,9 @@ from colorama import Fore, Style
 TIMESTEP = 0.05
 GRAVITY  = 9.8
 MAX_ITER = 30000
-PLOTS = True
-ANIMATE = False
-DAMPING = True
+PLOTS    = False
+ANIMATE  = True
+DAMPING  = True
 
 np.random.seed()
 
@@ -308,7 +308,7 @@ def animatePhaseplot(transitions,bounds):
 
   ax.set_aspect('equal', 'datalim')
   ax.grid()
-  ani = animation.ArtistAnimation(fig, lns, interval=200)
+  ani = animation.ArtistAnimation(fig, lns, interval=20, blit=True)
   ani.save('pendulum_swingup_from_RRT_phaseplot.mp4', fps=15, dpi=100)
   print("... Done after", time.time() - stime, "seconds")
 
@@ -409,7 +409,7 @@ if PLOTS:
   plotGoalPathParameters(axarr1,goalPath)
 
 if ANIMATE:
-  animatePendulum(goalPath)
-  #animatePhaseplot(trans,bounds)
+  # animatePendulum(goalPath)
+  animatePhaseplot(trans,bounds)
 
 plt.show() if PLOTS else print("Finished. Chosen to show no plots")

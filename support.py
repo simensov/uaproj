@@ -3,7 +3,7 @@ from environment import Environment, plot_environment, plot_line, plot_poly
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 import scipy.interpolate as si
-
+import random
 from colorama import Fore, Style
 
 class SearchNode(object):
@@ -31,7 +31,7 @@ class SearchNode(object):
         self._inertia   = inertia
 
     def __repr__(self):
-        return "<SearchNode (id: %s)| state: %s, cost: %s, parent_id: %s>" % (id(self), self.state, self.cost, id(self.parent))
+        return "<SearchNode (id: %s)| state: (%0.2f,%0.2f), cost: %s, parent_id: %s>" % (id(self), self.state[0],self.state[1], self.cost, id(self.parent))
 
     @property
     def state(self):
@@ -48,10 +48,19 @@ class SearchNode(object):
         """Get the parent search node that we are coming from."""
         return self._parent
 
+    @parent.setter
+    def parent(self,value):
+        self._parent = value
+
     @property
     def cost(self):
         """Get the cost to this search state"""
         return self._cost
+
+
+    @cost.setter
+    def cost(self,value):
+        self._cost = value
 
     @property
     def u(self):
@@ -119,7 +128,6 @@ class Path(object):
         self.path.reverse()
         self.cost = search_node.cost
 
-        
 
     def __repr__(self):
         return "Path of length %d, cost: %.3f: %s" % (len(self.path), self.cost, self.path)
@@ -156,7 +164,7 @@ class Edge(object):
 
 class Graph(object):
     def __init__(self, node_label_fn=None):
-        self._nodes = set()
+        self._nodes = list() # NB: CHANGED THIS TO LIST FROM set()
         self._edges = dict()
         self.node_label_fn = node_label_fn if node_label_fn else lambda x: x
         self.node_positions = dict()
@@ -166,9 +174,14 @@ class Graph(object):
 
     def add_node(self, node):
         """Adds a node to the graph."""
-        self._nodes.add(node)
+        # the function gets called when add_edge is called, so just check that we do not add several nodes 
+        if not node in self._nodes:
+            self._nodes.append(node) # NB: CHANGED THIS FROM .add(node)
+        
+        ##else:
+            #print("Node",node,"already in node list")
 
-    def add_edge(self, node1, node2, weight=1.0, bidirectional=True):
+    def add_edge(self, node1, node2, weight=1.0, bidirectional=False):
         """Adds an edge between node1 and node2. Adds the nodes to the graph first
         if they don't exist."""
         self.add_node(node1)
@@ -180,6 +193,23 @@ class Graph(object):
             node2_edges = self._edges.get(node2, set())
             node2_edges.add(Edge(node2, node1, weight))
             self._edges[node2] = node2_edges
+
+    def remove_edge(self, node1, node2): # maybe add bidirectional
+        if node1 in self._edges:
+            edgeset = self._edges[node1]
+            # TODO: check if parent must be changed here
+            for edge in edgeset:
+                if edge.target == node2:
+                    self._edges[node1].remove(edge)
+                    break
+
+        if node2 in self._edges:
+            edgeset = self._edges[node2]
+            for edge in edgeset:
+                if edge.target == node1:
+                    self._edges[node2].remove(edge)
+                    break
+
 
     def set_node_positions(self, positions):
         self.node_positions = positions
@@ -201,7 +231,7 @@ class Graph(object):
         return self._edges.get(node, set())
 
 
-import random
+
 
 ##############################################
 ##############################################
@@ -212,48 +242,6 @@ import random
 ##############################################
 ##############################################
 ##############################################
-
-### Moved to SimplePendulum.py
-'''
-class SimplePendulum(SearchNode):
-
-    def __init__(self,
-                 state       = [0,0],
-                 parent_node = None,
-                 cost        = 0.0,
-                 u           = 0,
-                 length      = 1,
-                 mass        = 0.5,
-                 max_torque  = 1,
-                 iteration   = 0,
-
-                 ):
-
-        self.iteration = iteration
-        self.max_torque = max_torque
-
-        super(SimplePendulum, self).__init__(state,parent_node,u,velocity,length, mass):
-    
-    def __repr__():
-        return 'Pendulum, (th=%s, thdot=%s)' % (self.q[0], self.q[1])
-
-
-    def calcF(u):
-        self.u = u
-        first=self.q[1]
-        second=-3*self.g*sin(q[0])/(2*self.L) - 3*self.u/(self.m*self.L**2)
-        return [first,second]
-
-    def getStates():
-        return self.q
-
-    def updateStates(u):
-        dq0, dq1 = calcF(u)
-        self.q = [self.q[0]+dq1*self.dt,self.q[1] + dq1 * self.dt]
-'''
-
-####
-####
 
 def eucl_dist(a, b):
     """Returns the euclidean distance between a and b."""
@@ -286,21 +274,33 @@ def nearestEuclSNode(graph, newNode):
 
 
 # improved version for RRT_experimental
-def nearestNeighbor(graph, newNode):
+def nearestEuclNeighbor(graph, newNode, k):
     # returning tuple in nodeList that is closest to newNode
-    X = np.array([[-1, -1], [-2, -1], [-3, -2], [1, 1], [2, 1], [3, 2]])
-    nbrs = NearestNeighbors(n_neighbors=2, algorithm='ball_tree').fit(X)
+    '''
+    graph is Graph object
+    newNode is a SearchNode
+    '''
+    states = []
+    it = 0
+    loc_pos = 0
+    for node in graph._nodes:
+        states.append([node.state[0],node.state[1]])
+        if node.state == newNode.state:
+            loc_pos = it
+        it += 1
+
+    X = np.array(states)
+    nbrs = NearestNeighbors(n_neighbors=k, algorithm='ball_tree').fit(X)
     distances, indices = nbrs.kneighbors(X)
 
+    # pick relevant ones
+    dist = distances[loc_pos]
+    indi = indices[loc_pos]
+    SN_list = []
+    for ind in indi:
+        SN_list.append(graph._nodes[ind])
 
-    nearestNodeInGraph = SearchNode((1,1)) # initialize for return purpose
-    dist = eucl_dist((-10000,-10000),(10000,10000)) # huge distance
-    for i in graph._nodes: # iterating through a set. i becomes a SEARCH NODE
-        if (eucl_dist(i.state, newNode) < dist): #SEARCH NODE.state is a tuple
-            nearestNodeInGraph = i # a search
-            dist = eucl_dist(i.state, newNode)
-
-    return nearestNodeInGraph, dist
+    return dist, SN_list
 
 # improved version for RRT_experimental
 # 
@@ -373,11 +373,17 @@ def bicycleKinematicsRK4(initState,theta,v,L,delta,dt):
     k4x = v * np.cos(theta + k1t)
     k4y = v * np.sin(theta + k1t)
 
+    '''
     t = theta + k1t * dt # no effect since it is constant
     x = x0 + (k1x + 2*(k2x + k3x) + k4x)*dt/6
     y = y0 + (k1y + 2*(k2y + k3y) + k4y)*dt/6
-
     return (x,y,t) 
+    '''
+    dx = (k1x + 2*(k2x + k3x) + k4x) / 6
+    dy = (k1y + 2*(k2y + k3y) + k4y) / 6
+    dth = k1t
+
+    return (dx,dy,dth)
 
 
 def steerBicycleWithKinematics(firstNode,theta,nextNode,dt):
@@ -398,14 +404,14 @@ def steerBicycleWithKinematics(firstNode,theta,nextNode,dt):
     delta = calculateSteeringAngle(firstNode,theta,nextNode,L)
 
     # 2) Use that as input to kinematics
-    
-    dx, dy, dth = bicycleKinematics(theta,v,L,delta,dt)
+    # Old Euler Method vs more precice Runge-Kutta fourth order
+    # dx, dy, dth = bicycleKinematics(theta,v,L,delta,dt)
+    dx,dy,dth = bicycleKinematicsRK4(firstNode,theta,v,L,delta,dt)
+
     thetanew    = theta        + dth * dt
     xnew        = firstNode[0] + dx * dt
     ynew        = firstNode[1] + dy * dt
- 
-    # xnew,ynew,thetanew = bicycleKinematicsRK4(firstNode,theta,v,L,delta,dt)
-
+    
     # map thetanew to (0,2pi)
     return (xnew,ynew), np.mod(thetanew, 2 * np.pi)
 
@@ -473,10 +479,6 @@ def steerBicycleWithDynamics(firstNode,theta,nextNode,dt,velocity):
     dr = (m*a*np.tan(delta)*(dvx-r*vy) + a * Ff / np.cos(delta) - b * Fr ) / I
     #dvy = (Ff * np.cos(delta) + Fr) / m - vx * r
     dvy = np.tan(delta)*(dvx-r*vy) + (Ff/np.cos(delta) + Fr)/m - vx*r
-        
-    # print(delta)
-    #print("Test", Ff, delta, Fr, m, r)
-    #print("Derivs",dr,dvy,dvx,dx,dy)
     
     rnew = dth + dr * dt
 
@@ -492,7 +494,7 @@ def steerBicycleWithDynamics(firstNode,theta,nextNode,dt,velocity):
     
     #print(dx,dy)
     newstate = (xnew,ynew)
-    # TODO: The problem is that the derivatives are usually very small or very big, so either it samples a point very far away, or it samples a point very close. It only add the ones that are very close, and according to the dynamics, they end up in a close path
+    # TODO (actually solved): The problem is that the derivatives are usually very small or very big, so either it samples a point very far away, or it samples a point very close. It only add the ones that are very close, and according to the dynamics, they end up in a close path
 
     # map thetanew to (0,2pi)
     return newstate, np.mod(thetanew, 2 * np.pi), (vxnew,vynew,rnew)
@@ -552,7 +554,6 @@ def steerWithQuadcopterDynamics(searchNode, nextNode, dt):
     samples new point reachable during dt from 
 
     '''
-
     # TODO: make a function that samples u1,u2 relative to what searchNode had before!!!
 
     L = 0.25     # length of rotor arm
@@ -647,6 +648,7 @@ def random_environment(bounds, start, radius, goal, n, size_limits=(0.5, 1.5)):
     return env
 
 def bspline_planning(x, y, sn):
+
     N = 3
     t = range(len(x))
     x_tup = si.splrep(t, x, k=N)
@@ -680,10 +682,11 @@ def plot_bspline(ax,x,y,bounds,sn=100):
     rx, ry = bspline_planning(x, y, sn)
 
     # show results
-    ax.plot(rx, ry, '-r', label="B-Spline path", color='green', linewidth=2, solid_capstyle='round', zorder=1)
+    ax.plot(rx, ry, '-r', color='green', linewidth=2, solid_capstyle='round', zorder=1)
     ax.grid(False)
-    ax.legend()
-    ax.axis("equal")    
+    #ax.set_label("Goal path")
+    #ax.legend()
+    # ax.axis("equal")    
     ax.set_xlim(xmin,xmax)
     ax.set_ylim(ymin,ymax)
 
@@ -705,3 +708,13 @@ def printRRT():
   print(' \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\'
         + Style.RESET_ALL + Style.BRIGHT)
   print(Fore.WHITE+ Style.RESET_ALL)
+
+
+def plotEdges(ax,graph,bounds):
+    x = []; y = []
+    for key in graph._edges:
+        edgething = graph._edges[key]
+        for edge in edgething:
+            x1,y1 = edge.source.state
+            x2,y2 = edge.target.state
+            ax.plot( [x1,x2] , [y1,y2] , color='grey', linewidth=0.5)

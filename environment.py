@@ -34,6 +34,29 @@ def plot_environment(env, bounds=None, figsize=None):
     ax.set_aspect('equal', adjustable='box')
     return ax
 
+def plot_environment_on_axes(ax, env, bounds=None, figsize=None):
+    if bounds is None and env.bounds:
+        minx, miny, maxx, maxy = env.bounds
+    elif bounds:
+        minx, miny, maxx, maxy = bounds
+    else:
+        minx, miny, maxx, maxy = (-10,-5,10,5)
+
+    max_width, max_height = 12, 5.5
+    if figsize is None:
+        width, height = max_width, (maxy-miny)*max_width/(maxx-minx)
+        if height > 5:
+            width, height = (maxx-minx)*max_height/(maxy-miny), max_height
+        figsize = (width, height)
+    #print(figsize)
+    for i, obs in enumerate(env.obstacles):
+        patch = PolygonPatch(obs, fc='blue', ec='blue', alpha=0.5, zorder=20)
+        ax.add_patch(patch)
+
+    plt.xlim([minx, maxx])
+    plt.ylim([miny, maxy])
+    ax.set_aspect('equal', adjustable='box')
+
 def plot_line(ax, line):
     x, y = line.xy
     ax.plot(x, y, color='gray', linewidth=1, solid_capstyle='round', zorder=1)

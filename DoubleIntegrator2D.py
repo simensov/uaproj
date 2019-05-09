@@ -8,13 +8,13 @@ import time
 
 from support import *
 
-
-TIMESTEP = 0.1
+TIMESTEP = 0.2
 GRAVITY  = 9.8
 MAX_ITER = 10000
 PLOTS = True
+REALTIME = False
 ANIMATE = False
-GOAL_SAMPLING_RATE = 20
+GOAL_SAMPLING_RATE = 40
 
 class DoubleIntegrator2D(SearchNode):
 
@@ -23,9 +23,9 @@ class DoubleIntegrator2D(SearchNode):
     parent_node = None,
     cost        = 0.0,
     u           = (0,0),
-    mass        = 1,
-    max_thrust  = 0.1,
-    max_vel     = 0.25,
+    mass        = 10.,
+    max_thrust  = 1,
+    max_vel     = 1.,
     iteration   = 0,
     dt          = TIMESTEP,
     gravity     = GRAVITY):
@@ -97,28 +97,26 @@ def steerDoubleIntegrator2D(node_nearest, node_rand):
   dy = node_rand[1] - y
 
   theta = np.arctan2(dy,dx)
-  u1 = np.cos(theta)
-  u2 = np.sin(theta)
+  u1 = np.cos(theta) * node_nearest.max_thrust
+  u2 = np.sin(theta) * node_nearest.max_thrust
 
-  '''
-  u1 = u2 = 0
-  if(dx > 0):
-    u1 = umax
-  elif(dx < 0):
-    u1 = -umax
-  if(dy > 0):
-    u2 = umax
-  elif(dy < 0):
-    u2 = -umax
-  '''
+  #u1 = node_nearest.max_thrust
+  #u2 = node_nearest.max_thrust
 
-  if np.fabs(vx) > node_nearest.max_vel:
+  dXdt,dYdt,dVxdt,dVydt = node_nearest.calcF((u1,u2))
+
+  vxnew = vx + dVxdt * TIMESTEP
+  vynew = vy + dVydt * TIMESTEP
+  xnew = x + dXdt * TIMESTEP
+  ynew = y + dYdt * TIMESTEP
+
+  if np.fabs(vxnew) > node_nearest.max_vel:
     u1 = -u1
+
   if np.fabs(vy) > node_nearest.max_vel:
     u2 = -u2
 
   dXdt,dYdt,dVxdt,dVydt = node_nearest.calcF((u1,u2))
-
   vxnew = vx + dVxdt * TIMESTEP
   vynew = vy + dVydt * TIMESTEP
   xnew = x + dXdt * TIMESTEP
@@ -181,14 +179,18 @@ def rrtDoubleIntegrator2D(bounds,environment,start_state,radius,end_regions):
       node_rand = goalPos
 
     node_nearest, node_dist = nearestEuclIntegratorNode(graph, node_rand) 
+    #print("Rand", node_rand)
+    #print("Near", node_nearest.getStates())
     steered_state, steered_u = steerDoubleIntegrator2D(node_nearest, node_rand)
+    #print("Steer", steered_state)
     
     if not (bounds[0] < steered_state[0] < bounds[2]) or not (bounds[1] < steered_state[1] < bounds[3]):
       continue
 
     node_steered = DoubleIntegrator2D(steered_state,node_nearest,node_nearest.cost+node_dist, u=steered_u)
 
-    if node_steered.state not in nodes:
+    # Seems like it is performing better if allowed to not check for existence
+    if True or node_steered.state not in nodes:
       if not obstacleIsInPath(node_nearest.getPos(), node_steered.getPos(), environment,radius):                
 
         nodes.append(node_steered.state)
@@ -197,6 +199,9 @@ def rrtDoubleIntegrator2D(bounds,environment,start_state,radius,end_regions):
 
         line = LineString([node_nearest.getPos(),node_steered.getPos()])
         plot_line(ax, line)
+        if REALTIME:
+          plt.draw()
+          plt.pause(0.000001)
 
       else:
         continue
@@ -225,7 +230,7 @@ radius = 0.3
 bounds = (-2, -3, 12, 8)
 end_region = Polygon([(10,5), (10,6), (11,6), (11,5)])
 
-if(True):
+if(False):
     # SUPERSIMPLE
     environment = Environment('supersimple.yaml')
     start = (0,0,0,0)
@@ -235,9 +240,22 @@ if(False):
     environment = Environment('env_superbug.yaml')
     start = (0,0,0,0)
 
+if(True):
+    environment = Environment('env_slit.yaml')
+    end_region = Polygon([(10,4), (10,5), (11,5), (11,4)])
+    start = (-1,4,0,0)
+
+
+'''
 ax = plot_environment(environment,bounds)
 plot_poly(ax,Point(start).buffer(radius,resolution=5),'blue',alpha=.2)
 plot_poly(ax, end_region,'red', alpha=0.2)
+'''
+
 goalPath, nodes, i, transitions = rrtDoubleIntegrator2D(bounds, environment,start, radius, end_region)
+
+
+for i in range(len(goalPath.path)):
+  print(goalPath.path[i] , "---" , goalPath.inputs[i])
 
 plt.show()
