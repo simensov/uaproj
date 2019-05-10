@@ -1,28 +1,32 @@
 from __future__ import division
-from matplotlib import pyplot as plt
-import numpy as np
-import yaml
-from shapely.geometry import Point, Polygon, LineString, box
-from environment import *
 import time
+from support import * # also importing 'utils' and 'searchClasses'
 
-from support import *
-#from utils import *
+################################
+################################
+################################
+########### Globals ############
+################################
+################################
+################################
 
-import dubins
-
-
-plotAll = True
-realTimePlotting = True
-
+plotAll = False
+realTimePlotting = False
 onePath = False
 plotAllFeasible = False
 noFeas = 100
 RRTSTAR = True
 STEERING_FUNCTION = None # None is none, False is kinematic, True is dynamic
 GOAL_BIAS = True
-MAX_ITER = 10000
+MAX_ITER = 3000
 
+################################
+################################
+################################
+############# RRT ##############
+################################
+################################
+################################
 
 def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
 
@@ -80,7 +84,7 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
                     input("Drawing nodes")
 
                 if RRTSTAR:
-                  k = 5 
+                  k = 5 # keep odd to avoid ties in choosing similar ones
                   # this parameter to be updated according to the log shit
                   # look for neighbors when we have enough nodes
                   if(len(graph._nodes) > k): 
@@ -240,7 +244,7 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
 ################################
 ################################
 ################################
-################################ Tests
+############ Tests #############
 ################################
 ################################
 ################################
@@ -267,10 +271,8 @@ if(plots):
 
 plotInFunction = False
 plotListOfTuples(ax,goalPath.path)
-input("Goal path should be found with cost " + str(goalPath.cost))
+q = input("Goal path should be found with cost " + str(goalPath.cost) +"\n Enter 'q' for anything else then plotting goalpath")
 
-plt.close() if plotInFunction else plt.show()
-
-input("Print enter to close")
+plt.close() if q == 'q' else plt.show()
 
 plt.close()
