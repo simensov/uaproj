@@ -1,154 +1,274 @@
-# Useful imports
 from __future__ import division
 from matplotlib import pyplot as plt
 import numpy as np
 import yaml
 from shapely.geometry import Point, Polygon, LineString, box
-from environment import Environment, plot_environment, plot_line, plot_poly
-from check_path import check_path
+from environment import *
+import time
 
 from support import *
+#from utils import *
 
-def rrt(bounds, environment, start_pose, radius, end_region):
-    '''
-    - bounds: (minx, miny, maxx, maxy) tuple over region
-    - environment: instance of the Environment class that describes the placement of the obstacles in the scene
-    - start_pose: start_pose = (x,y) is a tuple indicating the starting position of the robot
-    - radius: radius is the radius of the robot (used for collision checking)
-    - end_region: end_region is a shapely Polygon that describes the region that the robot needs to reach
-    '''
+import dubins
 
-    # Adding tuples to nodes-list -> represent all nodes expanded by tree
+
+plotAll = False
+realTimePlotting = False
+
+onePath = False
+plotAllFeasible = False
+noFeas = 100
+RRTSTAR = True
+STEERING_FUNCTION = False # None is none, False is kinematic, True is dynamic
+GOAL_BIAS = True
+MAX_ITER = 10000
+
+
+def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
+
+    # Adding tuples nodes-list -> represent ALL nodes expanded by tree
     nodes = [start_pose]
 
-    # Creating graph of SearchNodes from the tuples to represent the tree with parents. Used to order and
+    # TODO: better to add theta in state than have it as extra parameter all the time    
+    # Searchgraph used
     graph = Graph()
-    graph.add_node(SearchNode(start_pose))
-    goalPath = Path(SearchNode(start_pose)) # for initialization in case of no path found
+    start_node = SearchNode(start_pose,theta=start_theta)
+    graph.add_node(start_node)
+    goalPath = Path(start_node)
+    bestPath = goalPath
+    bestCost = 1000000
+    feasible_paths = []
+    goalNodes = []
     
-    # Draw the environment (with its obstacles) and with the start node + end region
-    ax = plot_environment(environment,bounds)
-    plot_poly(ax, Point(start_pose).buffer(radius, resolution=3),'blue')
+    dt = 0.4
+    
+    # Draw the environment 
+    ax = plot_environment(env,bounds)
+    plot_poly(ax,Point(start_pose).buffer(radius,resolution=5),'blue',alpha=.2)
     plot_poly(ax, end_region,'red', alpha=0.2)
     
-    for i in range(10000):  # random high number
-        # this range must be evaluated according to size of problem. RRT do not ensure any solution paths
-        
-        # sample a random node inside bounds (random number between xmin/max and ymin/max). all bound-"checking" is donw here: makes sure we don't have to do ant checks later
-        rand_xval = random.uniform(bounds[0],bounds[2])
-        rand_yval = random.uniform(bounds[1],bounds[3])
-        node_rand = (rand_xval,rand_yval)
-        
-        '''
-        --- For every x'th iteration - aim towards goal. A good choice varies, and depends on the step length that I decided in steerpath(). Not having this makes total number of nodes blow up. I have kept choices of when to goal bias and the travel distance in steering function to perform well in large environments.
-        --- Then, find out which node in our list that is the nearest to the random node. Returns a searchNode and a float distance.
-        --- Steer towards the new node -> correct parents and add cost
-        --- Check if the new steered node is in bounds.
-        --- If not visited before (avoid cycle) and no obstacles are in the path: add to tree
-        '''
-        
-        if not(i % 30):
-            node_rand = end_region.centroid.coords[0]
+    
+    sampling_rate = 30
+    for i in range(MAX_ITER):  # random high number
+        print("Iteration no. ", i) if i%(1000) == 0 else None
 
-        node_nearest, node_dist = nearestSNode(graph, node_rand) 
+        node_rand = getRandomNode(bounds,sampling_rate,i,GOAL_BIAS,end_region)
 
-        ## TODO: this steering function should somehow consider dynamics
-        steered_node = steerPath(node_nearest.state, node_rand)
-        
-        if not (bounds[0] < steered_node[0] < bounds[2]) or not (bounds[1] < steered_node[1] < bounds[3]):
-            continue # sometimes not checking for this made the path go out of bounds
+        node_nearest, node_dist = nearestEuclSNode(graph, node_rand) 
 
-        node_steered = SearchNode(steered_node,node_nearest,node_nearest.cost+node_dist)
+        steered_state,steered_theta,steered_velocity = steeringFunction(STEERING_FUNCTION, node_nearest,node_rand,node_dist,dt)
+
+        if not withinBounds(steered_state,bounds):
+          continue
+      
+        node_dist = eucl_dist(node_nearest.state,steered_state)
+
+        node_steered = SearchNode(steered_state,node_nearest,node_nearest.cost+node_dist,theta=steered_theta,velocity=steered_velocity)
         
         if node_steered.state not in nodes:
-            if not obstacleIsInPath(node_nearest.state, node_steered.state, environment,radius):
+            if not obstacleIsInPath(node_nearest.state, node_steered.state, env,radius):
 
-                # Keep track of total number of nodes in tree            
-                # Add edge (also adds new nodes to graph) and weight
-                # Plot non-colliding edge to show all searched nodes
                 nodes.append(node_steered.state)
-                graph.add_edge(node_nearest,node_steered,node_dist)
-                if(False):
-                    line = LineString([node_nearest.state,node_steered.state])
-                    plot_line_mine(ax, line)
+                graph.add_node(node_steered)
+                node_min = node_nearest
+                
+                if realTimePlotting:
+                  if plotAll:
+                    plotNodes(ax,graph)
+                    plt.draw()
+                    plt.pause(0.001)
+                    input("Drawing nodes")
 
+                if RRTSTAR:
+                  k = 5 
+                  # this parameter to be updated according to the log shit
+                  # look for neighbors when we have enough nodes
+                  if(len(graph._nodes) > k): 
+                    dist, SN_list = nearestEuclNeighbor(graph,node_steered,k);
+
+                    node_min, rel_dist = minimumCostPathFromNeighbors(k, SN_list, node_min, node_steered,env,radius)
+
+                    graph.add_edge(node_min,node_steered,rel_dist)
+
+                    if realTimePlotting:
+                      drawEdgesLive(ax,env,bounds,start_node.state,end_region,radius,node_steered,node_min,graph,0.001,'red')
+                      input("Drawing cheapest edge, iteration" + str(i))
+
+
+                    # rewiring the remaining neighbors
+                    for j in range(1,k):
+                      node_near = SN_list[j]
+                      if node_near is not node_min:
+                        if not obstacleIsInPath(node_near.state, node_steered.state,env,radius):
+
+                          newcost = node_steered.cost + eucl_dist(node_steered.state,node_near.state)
+
+                          if (node_near.cost > newcost):
+                            '''
+                            print("")
+                            print("###########")
+                            print("###########    REWIRING at", i)
+                            print("###########")
+                            print("")
+                            '''
+                            
+                            # remove parenthood and edge with old parent
+                            node_parent = node_near.parent
+
+
+                            '''
+                            print("Removing")
+                            print(node_parent)
+                            print("as parent of")
+                            print(node_near)
+                            print("and replacing with")
+                            print(node_steered)
+                            '''
+
+                            if realTimePlotting:
+                              input("Watch the removal and adding process")
+                              graph.remove_edge(node_parent,node_near)
+                              drawEdgesLive(ax,env,bounds,start_node.state,end_region,radius,node_steered,node_near,graph,1,"green")
+                              input("Drawing rewire: removed edge")
+                            else:
+                              # just remove the edge
+                              graph.remove_edge(node_parent,node_near)
+
+                            node_near.parent = node_steered
+                            node_near.cost = newcost
+                            dist=eucl_dist(node_steered.state,node_near.state)
+                            graph.add_edge(node_steered, node_near,dist)
+
+                            '''
+                            print("New near node")
+                            print(node_near)
+                            print("###########")
+                            print("###########")
+                            '''
+
+                            if realTimePlotting:
+                              drawEdgesLive(ax,env,bounds,start_node.state,end_region,radius,node_steered,node_near,graph,1,"green")
+                              input("Drawing rewire: added edge")
+                                               
+                  else:
+                    # not enough points to begin nearest neighbor yet
+                    graph.add_edge(node_nearest,node_steered,node_dist)
+                    
+                    if realTimePlotting:
+                      plotNodes(ax,graph)
+                      plotEdges(ax,graph)
+                      plt.draw()
+                      plt.pause(0.001)
+                      input("Drawing edges")
+                  
+                else:
+                  # No RRT Star - Don't consider nearest or rewiring
+                  graph.add_edge(node_nearest,node_steered,node_dist)
+
+                    
             else:
-                continue # Avoid goal check if collision is found
+                 # Avoid goal check if collision is found
+                continue
+
+        else: # the node has already been sampled
+          continue
 
         # Check last addition for goal state
         if goalReached(node_steered.state,radius,end_region):  
             goalPath = Path(node_steered)
-            break # break the while loop when solution is found!
+            goalNodes.append(node_steered)
+            bestPath = Path(node_steered)
 
-    # No. of nodes in total - No. of nodes in sol path - Sol path length
-    noOfTotalNodes = len(nodes); 
-    noOfNodesInSol = len(goalPath.path); 
-    pathLength = goalPath.cost
+            print("Path",len(feasible_paths),", cost:",goalPath.cost,", it:",i)
+
+            if(False):
+              plotNodes(ax,graph)
+              plotEdges(ax,graph)
+            
+            if onePath:
+              break
+            else:
+
+              sampling_rate = sampling_rate*2 # turn of goal sampling and focus on improving path
+
+              if not RRTSTAR:
+                if len(feasible_paths) > noFeas:
+                    break
+
+              feasible_paths = [Path(node) for node in goalNodes]
+              costs = [pathObj.cost for pathObj in feasible_paths]
+              idx =  costs.index(min(costs))
+              bestPath = feasible_paths[idx]
+
+              if plotAllFeasible:
+                if min(costs) < bestCost:
+                  bestCost = min(costs)
+
+                  ax.cla()
+                  plotListOfTuples(ax,bestPath.path)
+                  plot_environment_on_axes(ax,env,bounds)
+                  plot_poly(ax,Point(start_pose).buffer(radius,resolution=5),'blue',alpha=.2)
+                  plot_poly(ax, end_region,'red', alpha=0.2)
+                  
+                  # input("Found better path. Hit enter to draw")
+                  ax.set_title("Best cost out of " + str(len(goalNodes)) + " goal nodes: " + str(bestCost))
+                  plt.draw()
+                  plt.pause(0.0001)
+
+                  if realTimePlotting:
+                    plt.draw()
+                    plt.pause(0.0001)
+                    input("Found path")
+
+                else: # not best cost, but update no. of paths found
+                  ax.set_title("Best cost out of " + str(len(goalNodes)) + " goal nodes: " + str(bestCost))
+                  plt.draw()
+                  plt.pause(0.0001)
+
+              if not RRTSTAR and not onePath:
+                #restart search
+                nodes = [start_pose]
+                graph = Graph()
+                graph.add_node(SearchNode(start_pose,theta=start_theta))
+                goalPath = Path(SearchNode(start_pose,theta=start_theta))
     
-    for i in range(noOfNodesInSol-1):
-        # Draw goal path
-        line = LineString([goalPath.path[i], goalPath.path[i+1]])
-        plot_line_mine(ax, line)
-        
-        # Draw the expanded line
-        expanded_line = line.buffer(radius, resolution=3)
-        plot_poly(ax, expanded_line, 'green', alpha=0.2)
-        
-    # plotting last node in goalPath and setting title to format in task
-    plot_poly(ax, Point(goalPath.path[-1]).buffer(radius, resolution=3),'blue')
-    titleString = "Nodes total / in solution path: %s/ %s \nPath length: %0.3f"
-    ax.set_title(titleString % (noOfTotalNodes,noOfNodesInSol,pathLength))
-    
-    return goalPath.path
 
+    return bestPath, ax
 
+################################
 ################################
 ################################
 ################################ Tests
 ################################
 ################################
+################################
 
-if(True):
+plots = True
+if(plots):
+  radius = 0.3
+  bounds = (-2, -3, 12, 8)
+  goal_region = Polygon([(10,5), (10,6), (11,6), (11,5)])
 
-    if(False):
-        # SIMPLE
-        environment = Environment('simple.yaml')
-        radius = 0.3
-        bounds = (-2, -3, 12, 8)
-        start = (0, 0)
-        goal_region = Polygon([(10,5), (10,6), (11,6), (11,5)])
-        path = rrt(bounds, environment, start, radius, goal_region)
-        check_path(path, bounds, environment, start, radius, goal_region)
+  if(False):
+      # COMPARABLE TO QUADWORLD
+      environment = Environment('env_superbug.yaml')
+      start = (0, 0)
+      path, ax = rrt(bounds, environment,start, radius, goal_region,start_theta=np.pi * 0.8)
 
-
-    if(True):
-        # BUGTRAP
-        environment = Environment('bugtrap.yaml')
-        radius = 0.3
-        bounds = (-2, -3, 12, 8)
-        start = (2, 2.5)
-        goal_region = Polygon([(10,5), (10,6), (11,6), (11,5)])
-        path = rrt(bounds, environment, start, radius, goal_region)
-        #check_path(path, bounds, environment, start, radius, goal_region)
-
-    # DIFFERENT RANDOM ENVIRONMENTS
-    start = (-1 , -1)
-    radius = 0.1
-    goal_region = Polygon([(12,3), (12,4), (13,4),(13,3)])
-    bounds = (-5, -4, 15, 5)
-    envMed = random_environment(bounds, start, radius, goal_region, 40, (0.2,0.4))
-    envHard = random_environment(bounds, start, radius, goal_region,400,(0.2,0.4))
-
-    # Test in different environments
-    if(False):
-        print("Test medium environment")
-        path = rrt(bounds, envMed, start, radius, goal_region)
-        check_path(path, bounds, envMed, start, radius, goal_region)
-
-    if(False):
-        print("Test hard environment")
-        path = rrt(bounds, envHard, start, radius, goal_region)
-        check_path(path, bounds, envHard, start, radius, goal_region)
+  if(True):
+      #environment = Environment('env_slit.yaml')
+      environment = Environment('env_empty.yaml')
+      start = (-1, 3)
+      goal_region = Polygon([(11,7), (11,8), (12,8), (12,7)])
+      goalPath, ax = rrt(bounds, environment, start, radius, goal_region,start_theta=0)
 
 
-plt.show() if True else print("Finished. Chosen to show no plots")
+plotInFunction = False
+plotListOfTuples(ax,goalPath.path)
+input("Goal path should be found with cost " + str(goalPath.cost))
+
+plt.close() if plotInFunction else plt.show()
+
+input("Print enter to close")
+
+plt.close()

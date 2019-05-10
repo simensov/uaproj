@@ -1,10 +1,15 @@
+# this file contains class definitions and calculation functions for the motion planning problems
+
 from shapely.geometry import Point, Polygon, LineString, box
-from environment import Environment, plot_environment, plot_line, plot_poly
+from environment import Environment, plot_environment, plot_line, plot_poly,plot_environment_on_axes
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 import scipy.interpolate as si
+import matplotlib.pyplot as plt
 import random
 from colorama import Fore, Style
+
+from utils import *
 
 class SearchNode(object):
     def __init__(self,
@@ -56,7 +61,6 @@ class SearchNode(object):
     def cost(self):
         """Get the cost to this search state"""
         return self._cost
-
 
     @cost.setter
     def cost(self,value):
@@ -125,9 +129,14 @@ class Path(object):
             self.thetas.append(node.theta)
             self.inputs.append(node.u)
             node = node.parent
-        self.path.reverse()
-        self.cost = search_node.cost
 
+        self.path.reverse()
+        # TODO: cost can be updated by eucleidan measurments after reversing!!
+        self.cost = 0
+        for i in range(len(self.path)-1):
+            self.cost += eucl_dist(self.path[i], self.path[i+1])
+
+        # TODO: old one was self.cost = search_node.cost
 
     def __repr__(self):
         return "Path of length %d, cost: %.3f: %s" % (len(self.path), self.cost, self.path)
@@ -135,9 +144,6 @@ class Path(object):
     def edges(self):
         return zip(self.path[0:-1], self.path[1:])
 
-# import pydot_ng as pydot
-# import networkx as nx
-import matplotlib.pyplot as plt
 
 class NodeNotInGraph(Exception):
     def __init__(self, node):
@@ -157,7 +163,7 @@ class Edge(object):
 
     def __eq__(self, other):
         return self.source == other.source and self.target == other.target \
-               and self.weight == other.weight
+               #and self.weight == other.weight # TODO: OK??
 
     def __repr__(self):
         return "Edge(%r,%r,%r)" % (self.source, self.target, self.weight)
@@ -177,9 +183,6 @@ class Graph(object):
         # the function gets called when add_edge is called, so just check that we do not add several nodes 
         if not node in self._nodes:
             self._nodes.append(node) # NB: CHANGED THIS FROM .add(node)
-        
-        ##else:
-            #print("Node",node,"already in node list")
 
     def add_edge(self, node1, node2, weight=1.0, bidirectional=False):
         """Adds an edge between node1 and node2. Adds the nodes to the graph first
@@ -195,20 +198,31 @@ class Graph(object):
             self._edges[node2] = node2_edges
 
     def remove_edge(self, node1, node2): # maybe add bidirectional
+        removed = False
         if node1 in self._edges:
             edgeset = self._edges[node1]
-            # TODO: check if parent must be changed here
             for edge in edgeset:
                 if edge.target == node2:
-                    self._edges[node1].remove(edge)
+                    try:
+                        self._edges[node1].remove(edge)
+                    except:
+                        print("Didn't find the edge")
+                        break
+
+                    removed = True
                     break
 
-        if node2 in self._edges:
-            edgeset = self._edges[node2]
-            for edge in edgeset:
-                if edge.target == node1:
-                    self._edges[node2].remove(edge)
-                    break
+        if not removed:
+            if node2 in self._edges:
+                edgeset = self._edges[node2]
+                for edge in edgeset:
+                    if edge.target == node1:
+                        try:
+                            self._edges[node2].remove(edge)
+                        except:
+                            print("Didn't find the edge")
+                            break
+                        break
 
 
     def set_node_positions(self, positions):
@@ -232,7 +246,6 @@ class Graph(object):
 
 
 
-
 ##############################################
 ##############################################
 ##############################################
@@ -243,64 +256,6 @@ class Graph(object):
 ##############################################
 ##############################################
 
-def eucl_dist(a, b):
-    """Returns the euclidean distance between a and b."""
-    # a is a tuple of (x,y) values of first point
-    # b is a tuple of (x,y) values of second point
-    return np.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
-
-def eucl_dist_noSqrt(a,b):
-    '''
-    Returns the non-square-rooted distance for more efficient metric
-    Since the sqrt(x) is strictly increasing for all x >0, which also x is ofcourse, then we can sort based on x instead of calculating sqrt(x)
-    '''
-    return (a[0]-b[0])**2 + (a[1] - b[1])**2
-
-
-def nearestEuclSNode(graph, newNode):
-    # TODO: improve the metric here? Norm seems very naive
-
-    # returning tuple in nodeList that is closest to newNode
-    # nearestNodeInGraph = SearchNode((1,1)) # initialize for return purpose
-    dist = eucl_dist((-10000,-10000),(10000,10000)) # huge distance
-    for i in graph._nodes: # iterating through a set. i becomes a SEARCH NODE
-        newdist = eucl_dist_noSqrt(i.state, newNode)
-        if newdist < dist: #SEARCH NODE.state is a tuple
-           nearestNodeInGraph = i # a search
-           dist = newdist
-           newdistout = eucl_dist(i.state, newNode)
-
-    return nearestNodeInGraph, newdistout
-
-
-# improved version for RRT_experimental
-def nearestEuclNeighbor(graph, newNode, k):
-    # returning tuple in nodeList that is closest to newNode
-    '''
-    graph is Graph object
-    newNode is a SearchNode
-    '''
-    states = []
-    it = 0
-    loc_pos = 0
-    for node in graph._nodes:
-        states.append([node.state[0],node.state[1]])
-        if node.state == newNode.state:
-            loc_pos = it
-        it += 1
-
-    X = np.array(states)
-    nbrs = NearestNeighbors(n_neighbors=k, algorithm='ball_tree').fit(X)
-    distances, indices = nbrs.kneighbors(X)
-
-    # pick relevant ones
-    dist = distances[loc_pos]
-    indi = indices[loc_pos]
-    SN_list = []
-    for ind in indi:
-        SN_list.append(graph._nodes[ind])
-
-    return dist, SN_list
 
 # improved version for RRT_experimental
 # 
@@ -313,7 +268,7 @@ def steerPath(firstNode,nextNode,dist):
 
     hori_dist = nextNode[0] - firstNode[0] #signed
     verti_dist = nextNode[1] - firstNode[1] #signed
-    dist = dist*5
+    dist = dist
     # a new node that are closer to the next node - always smaller than the boundary-checked nextNode parameter
     # I chose to implement a slow but working solution -> normalize the distance to move. This could easily be changed
     return (firstNode[0] + hori_dist/dist, firstNode[1] + verti_dist/dist)
@@ -355,7 +310,7 @@ def bicycleKinematics(theta,v,L,delta,dt):
     dy   = v * np.sin(theta)
     return (dx,dy,dth) 
 
-def bicycleKinematicsRK4(initState,theta,v,L,delta,dt):
+def bicycleKinematicsRK4(initState,theta,v,L,delta):
     x0,y0 = initState
 
     k1t = v/L*np.tan(delta)
@@ -398,15 +353,14 @@ def steerBicycleWithKinematics(firstNode,theta,nextNode,dt):
 
     '''
     L,v = (0.25,0.5) # frame length L, velocity v
-    #vlist = [v/2.,v]
-    #v = random.choice(vlist)
+
     # 1) Find the new delta parameter for steering wheel
     delta = calculateSteeringAngle(firstNode,theta,nextNode,L)
 
     # 2) Use that as input to kinematics
     # Old Euler Method vs more precice Runge-Kutta fourth order
     # dx, dy, dth = bicycleKinematics(theta,v,L,delta,dt)
-    dx,dy,dth = bicycleKinematicsRK4(firstNode,theta,v,L,delta,dt)
+    dx,dy,dth = bicycleKinematicsRK4(firstNode,theta,v,L,delta)
 
     thetanew    = theta        + dth * dt
     xnew        = firstNode[0] + dx * dt
@@ -498,6 +452,25 @@ def steerBicycleWithDynamics(firstNode,theta,nextNode,dt,velocity):
 
     # map thetanew to (0,2pi)
     return newstate, np.mod(thetanew, 2 * np.pi), (vxnew,vynew,rnew)
+
+
+def steeringFunction(steer_f, node_nearest,node_rand,node_dist,dt):
+    steered_velocity = (0.5,0.0,0.0)
+    steered_theta = 0
+
+    if steer_f == None:
+      steered_node = steerPath(node_nearest.state, node_rand,node_dist)
+
+    if steer_f == False:
+      # kinematic model
+      steered_node, steered_theta = steerBicycleWithKinematics(node_nearest.state, node_nearest.theta, node_rand, dt)
+      steered_velocity = (0.5,0.0,0.0)
+    
+    if steer_f == True:
+      # dynamic model
+      steered_node, steered_theta, steered_velocity = steerBicycleWithDynamics(node_nearest.state, node_nearest.theta, node_rand, dt, velocity=node_nearest.velocity)
+
+    return steered_node,steered_theta,steered_velocity
 
 
 def sampleQuadcopterInputs(searchNode,nextnode,L,m,I,g,u):
@@ -610,111 +583,25 @@ def goalReached(node,radius,end_region):
     # returns a boolean for node tuple + radius inside the region
     return end_region.contains(Point(node))
 
-def plot_line_mine(ax, line,width=2):
-    # wanted to draw lines in path more clearly. gathered format from environment.py
-    x, y = line.xy
-    ax.plot(x, y, color='black', linewidth=width, solid_capstyle='round', zorder=1)
 
-def random_environment(bounds, start, radius, goal, n, size_limits=(0.5, 1.5)):
-    minx, miny, maxx, maxy = bounds
-    # print(bounds)
-    edges = 4
-    minl, maxl = size_limits
-    env = Environment(None)
-    obs = []
-    start_pose = Point(start).buffer(radius, resolution=3)
-    obi = 0
-    while obi < n:
-        r = np.random.uniform(low=0.0, high=1.0, size=2)
-        xy = np.array([minx + (maxx-minx)*r[0], miny + (maxy-miny)*r[1]])
-        
-        angles = np.random.rand(edges)
-        angles = angles*2*np.pi / np.sum(angles)
-        for i in range(1,len(angles)):
-            angles[i] = angles[i-1] + angles[i]
-        angles = 2*np.pi * angles / angles[-1] 
-        angles = angles + 2*np.pi*np.random.rand()
-        lengths = 0.5*minl + (maxl-minl) * 0.5 * np.random.rand(edges)
-        xx = xy[0] + np.array([l*np.cos(a) for a,l in zip(angles,lengths)])
-        yy = xy[1] + np.array([l*np.sin(a) for a,l in zip(angles,lengths)])
-        p = Polygon([(x,y) for x,y in zip(xx,yy)])
-        if p.intersects(start_pose) or p.intersects(goal):
-            continue
-        else:
-            obi = obi + 1
-            obs.append(p)
-#         coords = xy + [l*np.cos(a),l*np.sin(a) for a,l in zip(angles,lengths)]
-    env.add_obstacles(obs)
-    return env
+def minimumCostPathFromNeighbors(k,SN_list,node_min,node_steered,env,radius):
 
-def bspline_planning(x, y, sn):
+   # for all neighbors, add the steered node at the spot where it contributes to the lowest cost
+    # start counting at 1 since pos 0 is the node itself
+    for j in range(1,k):
+      node_near = SN_list[j]
 
-    N = 3
-    t = range(len(x))
-    x_tup = si.splrep(t, x, k=N)
-    y_tup = si.splrep(t, y, k=N)
+      if not obstacleIsInPath(node_near.state, node_steered.state, env,radius):
 
-    x_list = list(x_tup)
-    xl = x.tolist()
-    x_list[1] = xl + [0.0, 0.0, 0.0, 0.0]
+        cost_near=node_near.cost+eucl_dist(node_near.state,node_steered.state)
 
-    y_list = list(y_tup)
-    yl = y.tolist()
-    y_list[1] = yl + [0.0, 0.0, 0.0, 0.0]
+        if cost_near < node_steered.cost:
+          node_min = node_near
 
-    ipl_t = np.linspace(0.0, len(x) - 1, sn)
-    rx = si.splev(ipl_t, x_list)
-    ry = si.splev(ipl_t, y_list)
+    # update parent and cost accordingly. Has been tested with prints and plots and should be working fine!
+    node_steered.parent = node_min
+    rel_dist = eucl_dist(node_min.state,node_steered.state)
+    newcost = node_min.cost + rel_dist
+    node_steered.cost = newcost
 
-    return rx, ry
-
-def plot_bspline(ax,x,y,bounds,sn=100):
-    '''
-    ax is axis object
-    x anf y are lists
-    sn is number of samples (resolution on spline)
-    '''
-    xmin,ymin,xmax,ymax = bounds
-
-    x = np.array(x)
-    y = np.array(y)
-
-    rx, ry = bspline_planning(x, y, sn)
-
-    # show results
-    ax.plot(rx, ry, '-r', color='green', linewidth=2, solid_capstyle='round', zorder=1)
-    ax.grid(False)
-    #ax.set_label("Goal path")
-    #ax.legend()
-    # ax.axis("equal")    
-    ax.set_xlim(xmin,xmax)
-    ax.set_ylim(ymin,ymax)
-
-def plotListOfTuples(ax,tupleList):
-  for i in range(len(tupleList)-1):
-    x = tupleList[i][0], tupleList[i+1][0]
-    y = [tupleList[i][1], tupleList[i+1][1]]
-    ax.plot(x,y)
-
-def printRRT():
-  print(Fore.WHITE + Style.BRIGHT)
-  print('     ____________________________')
-  print('    /                           /\\ ')
-  print('   / '+Fore.RED+'RRT'+Fore.WHITE+' in'+'              /*    / /\\')
-  print('  /  '+Fore.BLUE+'Pyt'+Fore.YELLOW+'hon'+Fore.WHITE+'     _     ___|    / /\\')
-  print(' /           o_/ \___/       / /\\')
-  print('/___________________________/ /\\')
-  print('\___________________________\/\\')
-  print(' \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\'
-        + Style.RESET_ALL + Style.BRIGHT)
-  print(Fore.WHITE+ Style.RESET_ALL)
-
-
-def plotEdges(ax,graph,bounds):
-    x = []; y = []
-    for key in graph._edges:
-        edgething = graph._edges[key]
-        for edge in edgething:
-            x1,y1 = edge.source.state
-            x2,y2 = edge.target.state
-            ax.plot( [x1,x2] , [y1,y2] , color='grey', linewidth=0.5)
+    return node_min, rel_dist
