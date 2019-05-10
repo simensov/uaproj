@@ -16,7 +16,39 @@ from searchClasses import *
 ##############################################
 ##############################################
 
+###
+###
+###
+def withinBounds(steered_node,bounds):
+    return (bounds[0] < steered_node[0] < bounds[2]) and (bounds[1] < steered_node[1] < bounds[3])
 
+###
+###
+###
+def getRandomNode(bounds,sampling_rate,iteration,goal_bias,end_region,ellipse=None):
+    '''
+    Purpose:    samples random node from within given bounds
+
+    :params:    ellipse is a tuple of ((x1,y1) , (x2,y2) , angle wrt x axis)
+    '''
+
+    if not(iteration % sampling_rate) and (not iteration==0) and (goal_bias):
+        node_rand = end_region.centroid.coords[0]
+    else:
+        rand_x = random.uniform(bounds[0],bounds[2])
+        rand_y = random.uniform(bounds[1],bounds[3])
+
+        if not ellipse is None: # we have initiated informed RRT - improve sampling procedure
+            pass
+            # TODO: a loop that checks within a ceraint 
+
+        node_rand = (rand_x,rand_y) 
+
+    return node_rand
+
+###
+###
+###
 def steerPath(firstNode,nextNode,dist):
     # tuples as input - distance between them gives ish distance to move
 

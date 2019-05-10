@@ -80,26 +80,6 @@ def nearestEuclNeighbor(graph, newNode, k):
 ###
 ###
 ###
-def withinBounds(steered_node,bounds):
-    return (bounds[0] < steered_node[0] < bounds[2]) and (bounds[1] < steered_node[1] < bounds[3])
-
-###
-###
-###
-def getRandomNode(bounds,sampling_rate,iteration,goal_bias,end_region):
-
-    if not(iteration % sampling_rate) and (not iteration==0) and (goal_bias):
-        node_rand = end_region.centroid.coords[0]
-    else:
-        rand_xval = random.uniform(bounds[0],bounds[2])
-        rand_yval = random.uniform(bounds[1],bounds[3])
-        node_rand = (rand_xval,rand_yval) 
-
-    return node_rand
-
-###
-###
-###
 def plot_line_mine(ax, line,width=2,color='black'):
     # wanted to draw lines in path more clearly. gathered format from environment.py
     x, y = line.xy

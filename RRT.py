@@ -10,15 +10,17 @@ from support import * # also importing 'utils' and 'searchClasses'
 ################################
 ################################
 
-plotAll = False
+plotAll = True
 realTimePlotting = False
 onePath = False
-plotAllFeasible = False
+plotAllFeasible = True
 noFeas = 100
 RRTSTAR = True
 STEERING_FUNCTION = None # None is none, False is kinematic, True is dynamic
 GOAL_BIAS = True
 MAX_ITER = 3000
+NEIGHBORS = 9
+PAUSETIME = 0.1
 
 ################################
 ################################
@@ -80,11 +82,11 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
                   if plotAll:
                     plotNodes(ax,graph)
                     plt.draw()
-                    plt.pause(0.001)
-                    input("Drawing nodes")
+                    plt.pause(PAUSETIME)
+                    #input("Drawing nodes")
 
                 if RRTSTAR:
-                  k = 5 # keep odd to avoid ties in choosing similar ones
+                  k = NEIGHBORS # keep odd to avoid ties
                   # this parameter to be updated according to the log shit
                   # look for neighbors when we have enough nodes
                   if(len(graph._nodes) > k): 
@@ -95,8 +97,8 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
                     graph.add_edge(node_min,node_steered,rel_dist)
 
                     if realTimePlotting:
-                      drawEdgesLive(ax,env,bounds,start_node.state,end_region,radius,node_steered,node_min,graph,0.001,'red')
-                      input("Drawing cheapest edge, iteration" + str(i))
+                      drawEdgesLive(ax,env,bounds,start_node.state,end_region,radius,node_steered,node_min,graph,PAUSETIME,'red')
+                      #input("Drawing cheapest edge, iteration" + str(i))
 
 
                     # rewiring the remaining neighbors
@@ -108,50 +110,56 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
                           newcost = node_steered.cost + eucl_dist(node_steered.state,node_near.state)
 
                           if (node_near.cost > newcost):
-                            '''
-                            print("")
-                            print("###########")
-                            print("###########    REWIRING at", i)
-                            print("###########")
-                            print("")
-                            '''
-                            
+
                             # remove parenthood and edge with old parent
                             node_parent = node_near.parent
 
-
-                            '''
-                            print("Removing")
-                            print(node_parent)
-                            print("as parent of")
-                            print(node_near)
-                            print("and replacing with")
-                            print(node_steered)
-                            '''
-
                             if realTimePlotting:
+                              # TODO: this is used for debugging
+                              print("")
+                              print("###########")
+                              print("###########    REWIRING at iteration", i)
+                              print("###########")
+                              print("")
                               input("Watch the removal and adding process")
+                              print("Remove node :", node_parent)
+                              print("as parent of:", node_near)
+                              print("Replace with:", node_steered)
+                              print("")
+                              #print("\nEdges from near before replacement:")
+                              #print(graph.node_edges(node_near))
+
                               graph.remove_edge(node_parent,node_near)
-                              drawEdgesLive(ax,env,bounds,start_node.state,end_region,radius,node_steered,node_near,graph,1,"green")
-                              input("Drawing rewire: removed edge")
+                              drawEdgesLive(ax,env,bounds,start_node.state,end_region,radius,node_steered,node_near,graph,0.01,"green")
+
+                              node_near.parent = node_steered
+                              node_near.cost = newcost
+                              dist=eucl_dist(node_steered.state,node_near.state)
+                              graph.add_edge(node_steered,node_near,dist)
+                              # update the edges since node has been changed
+                              graph.updateEdges(node_near)
+                              print("\nEdges from near after replacement")
+                              print(graph.node_edges(node_near))
+                              input("Drawing rewire: should have removed edge")
                             else:
                               # just remove the edge
                               graph.remove_edge(node_parent,node_near)
+                              node_near.parent = node_steered
+                              node_near.cost = newcost
+                              dist=eucl_dist(node_steered.state,node_near.state)
+                              graph.add_edge(node_steered,node_near,dist)
+                              # update the edges since the node has changed
+                              graph.updateEdges(node_near)
 
+                            '''
                             node_near.parent = node_steered
                             node_near.cost = newcost
                             dist=eucl_dist(node_steered.state,node_near.state)
                             graph.add_edge(node_steered, node_near,dist)
-
-                            '''
-                            print("New near node")
-                            print(node_near)
-                            print("###########")
-                            print("###########")
                             '''
 
                             if realTimePlotting:
-                              drawEdgesLive(ax,env,bounds,start_node.state,end_region,radius,node_steered,node_near,graph,1,"green")
+                              drawEdgesLive(ax,env,bounds,start_node.state,end_region,radius,node_steered,node_near,graph,0.01,"green")
                               input("Drawing rewire: added edge")
                                                
                   else:
@@ -162,8 +170,8 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
                       plotNodes(ax,graph)
                       plotEdges(ax,graph)
                       plt.draw()
-                      plt.pause(0.001)
-                      input("Drawing edges")
+                      plt.pause(PAUSETIME)
+                      # input("Drawing edges")
                   
                 else:
                   # No RRT Star - Don't consider nearest or rewiring
@@ -217,6 +225,7 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
                   plot_poly(ax, end_region,'red', alpha=0.2)
                   
                   # input("Found better path. Hit enter to draw")
+                  print("Found better path")
                   ax.set_title("Best cost out of " + str(len(goalNodes)) + " goal nodes: " + str(bestCost))
                   plt.draw()
                   plt.pause(0.0001)
@@ -268,10 +277,14 @@ if(plots):
       goal_region = Polygon([(11,7), (11,8), (12,8), (12,7)])
       goalPath, ax = rrt(bounds, environment, start, radius, goal_region,start_theta=0)
 
+# important detail!!! don't use the cost of the last searchnode as final cost. That cost was the cost of the path the searchnode was a part of when it found the goal the first time, but the path might have changed after that, so the distance metric is used to readjust the path cost when a Path.cost is called!
 
 plotInFunction = False
 plotListOfTuples(ax,goalPath.path)
 q = input("Goal path should be found with cost " + str(goalPath.cost) +"\n Enter 'q' for anything else then plotting goalpath")
+
+
+ax.set_title("Best cost out of "+ str(goalPath.cost))
 
 plt.close() if q == 'q' else plt.show()
 

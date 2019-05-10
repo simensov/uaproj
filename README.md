@@ -6,10 +6,11 @@ Another part in the project was done by implementing ideas from "Real-time motio
 
 ## File structure:
 
-###Run scripts:
+Run scripts:
  - RRT.py (can be used with bicycle with kinematic and dynamic constraints)
  - DoubleIntegrator2D.py
  - SimplePendulum.py
 
-All files imports support.py, which implements steeringfunctions
-support.py imports utils and searchClasses, which consists of implementation of plotting tools and classes used for the RRT search
+Other:
+- All files imports support.py, which implements steeringfunctions
+- support.py imports utils and searchClasses, which consists of implementation of plotting tools and classes used for the RRT search

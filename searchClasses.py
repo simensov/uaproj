@@ -3,6 +3,9 @@
 
 from utils import eucl_dist
 
+###
+### SearchNode class
+###
 class SearchNode(object):
     def __init__(self,
                  state,
@@ -26,22 +29,16 @@ class SearchNode(object):
         self._m         = mass
         self._inertia   = inertia
 
-    def __repr__(self):
-        return "<SearchNode (id: %s), state: (%0.2f,%0.2f), cost: %0.2f, parent: %s>" % (id(self), self.state[0],self.state[1], self.cost, id(self.parent))
-
     @property
     def state(self):
-        """Get the state represented by this SearchNode"""
         return self._state
 
     @state.setter
     def state(self,value):
-        """Get the state represented by this SearchNode"""
         self._state = value
 
     @property
     def parent(self):
-        """Get the parent search node that we are coming from."""
         return self._parent
 
     @parent.setter
@@ -50,7 +47,6 @@ class SearchNode(object):
 
     @property
     def cost(self):
-        """Get the cost to this search state"""
         return self._cost
 
     @cost.setter
@@ -59,7 +55,6 @@ class SearchNode(object):
 
     @property
     def u(self):
-        """Get the u that was taken to get from parent to the state represented by this node."""
         return self._u
 
     @u.setter
@@ -68,33 +63,30 @@ class SearchNode(object):
 
     @property
     def theta(self):
-        """Get the theta that was taken to get from parent to the state represented by this node."""
         return self._theta
 
     @property
     def velocity(self):
-        """Get the velocity that was taken to get from parent to the state represented by this node."""
         return self._velocity
 
     @property
     def velocity(self):
-        """Get the velocity that was taken to get from parent to the state represented by this node."""
         return self._velocity
 
     @property
     def length(self):
-        """Get the velocity that was taken to get from parent to the state represented by this node."""
         return self._length
     
     @property
     def m(self):
-        """Get the velocity that was taken to get from parent to the state represented by this node."""
         return self._m
 
     @property
     def inertia(self):
-        """Get the velocity that was taken to get from parent to the state represented by this node."""
         return self._inertia
+
+    def __repr__(self):
+        return "<SN (id: %s), (%0.2f,%0.2f), %0.2f, parent: %s>" % (id(self), self.state[0],self.state[1], self.cost, id(self.parent))
 
     def __eq__(self, other):
         return isinstance(other, SearchNode) and self._state == other._state
@@ -106,9 +98,11 @@ class SearchNode(object):
         return self._cost > other._cost
 
 
+###
+### Path class
+###
 class Path(object):
-    """This class computes the path from the starting state until the state specified by the search_node
-    parameter by iterating backwards."""
+    """This class computes the path from the starting state until the state specified by the search_node parameter by iterating backwards."""
 
     def __init__(self, search_node):
         self.path = []
@@ -122,12 +116,11 @@ class Path(object):
             node = node.parent
 
         self.path.reverse()
-        # TODO: cost can be updated by eucleidan measurments after reversing!!
+        # TODO: self.cost = search_node.cost # not correct if RRT* has rewired
         self.cost = 0
         for i in range(len(self.path)-1):
             self.cost += eucl_dist(self.path[i], self.path[i+1])
-
-        # TODO: old one was self.cost = search_node.cost
+        
 
     def __repr__(self):
         return "<Path: %d elements, cost: %.3f: %s>" % (len(self.path), self.cost, self.path)
@@ -135,30 +128,28 @@ class Path(object):
     def edges(self):
         return zip(self.path[0:-1], self.path[1:])
 
-
-class NodeNotInGraph(Exception):
-    def __init__(self, node):
-        self.node = node
-
-    def __str__(self):
-        return "Node %s not in graph." % str(self.node)
-
+###
+### Edge class
+###
 class Edge(object):
     def __init__(self, source, target, weight=1.0):
         self.source = source
         self.target = target
-        self.weight = weight
+        # self.weight = weight
 
     def __hash__(self):
-        return hash("%s_%s_%f" % (self.source, self.target, self.weight))
+        return hash("%s_%s" % (self.source, self.target))#, self.weight)) # add %f if taking back weight
 
     def __eq__(self, other):
-        return self.source == other.source and self.target == other.target \
+        return self.source.state == other.source.state and self.target.state == other.target.state
                #and self.weight == other.weight # TODO: OK??
 
     def __repr__(self):
-        return "Edge(\n %r \n %r \n %r \n)" % (self.source, self.target, self.weight)
+        return "Edge(\n %r \n %r \n)" % (self.source, self.target)#, self.weight)
 
+###
+### Graph class
+###
 class Graph(object):
     def __init__(self, node_label_fn=None):
         self._nodes = list() # NB: CHANGED THIS TO LIST FROM set()
@@ -168,6 +159,7 @@ class Graph(object):
 
     def __contains__(self, node):
         return node in self._nodes
+
 
     def add_node(self, node):
         """Adds a node to the graph."""
@@ -180,35 +172,51 @@ class Graph(object):
         if they don't exist."""
         self.add_node(node1)
         self.add_node(node2)
-        node1_edges = self._edges.get(node1, set())
-        node1_edges.add(Edge(node1, node2, weight))
+        
+        #node1_edges = self._edges.get(node1, set())
+        #node1_edges.add(Edge(node1, node2, weight))
+
+        node1_edges = self._edges.get(node1, list())
+        node1_edges.append(Edge(node1, node2, weight))
+
         self._edges[node1] = node1_edges
         if bidirectional:
             node2_edges = self._edges.get(node2, set())
             node2_edges.add(Edge(node2, node1, weight))
             self._edges[node2] = node2_edges
 
-    def remove_edge(self, node1, node2): # maybe add bidirectional
-        print("Removing edge from",id(node1),"to",id(node2))
-        removed = False
-        if node1 in self._edges:
-            edgeset = self._edges[node1]
-            print("Edges from", node1)
-            for edge in edgeset:
-                print(edge)
-                print("Target:",edge.target)
+    def remove_edge(self, node1, node2, bidirectional=False):
 
-            for edge in edgeset:
+
+        if node1 in self._edges:
+            edgelist = self._edges[node1]
+            for i in range(len(edgelist)):
+                edge = edgelist[i]
                 if edge.target == node2:
-                    print("Found :", node2, "as target")
                     try:
-                        self._edges[node1].remove(edge)
+                        self._edges[node1].remove(self._edges[node1][i])
+                        # print("Successfully removed edge")
                     except:
                         print("Didn't find edge",id(node1),id(node2))
-                        break
-
-                    removed = True
+                        
                     break
+
+        if bidirectional:
+          if node2 in self._edges:
+            edgelist = self._edges[node2]
+            for i in range(len(edgelist)):
+                edge = edgelist[i]
+                if edge.target == node1:
+                    try:
+                        self._edges[node2].remove(self._edges[node2][i])
+                        # print("Successfully removed edge")
+                    except:
+                        print("Didn't find edge",id(node2),id(node1))
+                        
+                    break
+
+
+
 
 
     def set_node_positions(self, positions):
@@ -217,15 +225,29 @@ class Graph(object):
     def set_node_pos(self, node, pos):
         """Sets the (x,y) pos of the node, if it exists in the graph."""
         if not node in self:
-            raise NodeNotInGraph(node)
+            raise Exception('Node is noth in graph!')
         self.node_positions[node] = pos
 
     def get_node_pos(self, node):
         if not node in self:
-            raise NodeNotInGraph(node)
+            raise Exception('Node is noth in graph!')
         return self.node_positions[node]
 
     def node_edges(self, node):
         if not node in self:
-            raise NodeNotInGraph(node)
+            raise Exception('Node is noth in graph!')
         return self._edges.get(node, set())
+
+    def updateEdges(self,node):
+      '''
+      Purpose:  when a node has been rewired, its parent has changed. 
+                Therefore the list of edges originally in the graph extending from this node doesn't contain the correct source (since both its cost and parent has been updated). This function updates the source of all of those edges
+
+      :params:  node: s SearchNode object
+      '''
+      if node in self._edges:
+        for edge in self._edges[node]:
+          edge.source = node
+      else:
+        # the node might not have any edges connected to itself as it could be on the edge of a path
+        pass
