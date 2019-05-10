@@ -36,7 +36,7 @@ class SearchNode(object):
         self._inertia   = inertia
 
     def __repr__(self):
-        return "<SearchNode (id: %s)| state: (%0.2f,%0.2f), cost: %s, parent_id: %s>" % (id(self), self.state[0],self.state[1], self.cost, id(self.parent))
+        return "<SearchNode (id: %s), state: (%0.2f,%0.2f), cost: %0.2f, parent: %s>" % (id(self), self.state[0],self.state[1], self.cost, id(self.parent))
 
     @property
     def state(self):
@@ -139,7 +139,7 @@ class Path(object):
         # TODO: old one was self.cost = search_node.cost
 
     def __repr__(self):
-        return "Path of length %d, cost: %.3f: %s" % (len(self.path), self.cost, self.path)
+        return "<Path: %d elements, cost: %.3f: %s>" % (len(self.path), self.cost, self.path)
 
     def edges(self):
         return zip(self.path[0:-1], self.path[1:])
@@ -166,7 +166,7 @@ class Edge(object):
                #and self.weight == other.weight # TODO: OK??
 
     def __repr__(self):
-        return "Edge(%r,%r,%r)" % (self.source, self.target, self.weight)
+        return "Edge(\n %r \n %r \n %r \n)" % (self.source, self.target, self.weight)
 
 class Graph(object):
     def __init__(self, node_label_fn=None):
@@ -198,31 +198,26 @@ class Graph(object):
             self._edges[node2] = node2_edges
 
     def remove_edge(self, node1, node2): # maybe add bidirectional
+        print("Removing edge from",id(node1),"to",id(node2))
         removed = False
         if node1 in self._edges:
             edgeset = self._edges[node1]
+            print("Edges from", node1)
+            for edge in edgeset:
+                print(edge)
+                print("Target:",edge.target)
+
             for edge in edgeset:
                 if edge.target == node2:
+                    print("Found :", node2, "as target")
                     try:
                         self._edges[node1].remove(edge)
                     except:
-                        print("Didn't find the edge")
+                        print("Didn't find edge",id(node1),id(node2))
                         break
 
                     removed = True
                     break
-
-        if not removed:
-            if node2 in self._edges:
-                edgeset = self._edges[node2]
-                for edge in edgeset:
-                    if edge.target == node1:
-                        try:
-                            self._edges[node2].remove(edge)
-                        except:
-                            print("Didn't find the edge")
-                            break
-                        break
 
 
     def set_node_positions(self, positions):

@@ -12,14 +12,14 @@ from support import *
 import dubins
 
 
-plotAll = False
-realTimePlotting = False
+plotAll = True
+realTimePlotting = True
 
 onePath = False
 plotAllFeasible = False
 noFeas = 100
 RRTSTAR = True
-STEERING_FUNCTION = False # None is none, False is kinematic, True is dynamic
+STEERING_FUNCTION = None # None is none, False is kinematic, True is dynamic
 GOAL_BIAS = True
 MAX_ITER = 10000
 
@@ -194,6 +194,8 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
               if not RRTSTAR:
                 if len(feasible_paths) > noFeas:
                     break
+
+              ## Important that there is a new init of Path object each time 
 
               feasible_paths = [Path(node) for node in goalNodes]
               costs = [pathObj.cost for pathObj in feasible_paths]
