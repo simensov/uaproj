@@ -2,7 +2,7 @@
 # this file contains the implementation of the search classes used in RRT
 
 from utils import eucl_dist
-
+ 
 ###
 ### SearchNode class
 ###
@@ -102,7 +102,9 @@ class SearchNode(object):
 ### Path class
 ###
 class Path(object):
-    """This class computes the path from the starting state until the state specified by the search_node parameter by iterating backwards."""
+    """
+    This class computes the path from the starting state until the state specified by the search_node parameter by iterating backwards.
+    """
 
     def __init__(self, search_node):
         self.path = []
@@ -135,24 +137,24 @@ class Edge(object):
     def __init__(self, source, target, weight=1.0):
         self.source = source
         self.target = target
-        # self.weight = weight
+        self.weight = weight
 
     def __hash__(self):
-        return hash("%s_%s" % (self.source, self.target))#, self.weight)) # add %f if taking back weight
+        return hash("%s_%s_%f" % (self.source, self.target, self.weight)) 
 
     def __eq__(self, other):
-        return self.source.state == other.source.state and self.target.state == other.target.state
-               #and self.weight == other.weight # TODO: OK??
+        return self.source.state == other.source.state and self.target.state == other.target.state and self.weight == other.weight
 
     def __repr__(self):
-        return "Edge(\n %r \n %r \n)" % (self.source, self.target)#, self.weight)
+        return "Edge(\n %r \n %r \n %r \n)" % (self.source, self.target, self.weight)
 
 ###
 ### Graph class
 ###
 class Graph(object):
+
     def __init__(self, node_label_fn=None):
-        self._nodes = list() # NB: CHANGED THIS TO LIST FROM set()
+        self._nodes = list()
         self._edges = dict()
         self.node_label_fn = node_label_fn if node_label_fn else lambda x: x
         self.node_positions = dict()
@@ -160,21 +162,22 @@ class Graph(object):
     def __contains__(self, node):
         return node in self._nodes
 
-
+    ###
     def add_node(self, node):
         """Adds a node to the graph."""
         # the function gets called when add_edge is called, so just check that we do not add several nodes 
         if not node in self._nodes:
-            self._nodes.append(node) # NB: CHANGED THIS FROM .add(node)
+            self._nodes.append(node)
 
+    ###
     def add_edge(self, node1, node2, weight=1.0, bidirectional=False):
-        """Adds an edge between node1 and node2. Adds the nodes to the graph first
-        if they don't exist."""
+        """
+        Purpose:  Adds an edge between node1 and node2.
+                  Adds the nodes to the graph first if they don't exist.
+
+        """
         self.add_node(node1)
         self.add_node(node2)
-        
-        #node1_edges = self._edges.get(node1, set())
-        #node1_edges.add(Edge(node1, node2, weight))
 
         node1_edges = self._edges.get(node1, list())
         node1_edges.append(Edge(node1, node2, weight))
@@ -185,59 +188,64 @@ class Graph(object):
             node2_edges.add(Edge(node2, node1, weight))
             self._edges[node2] = node2_edges
 
+    ###
     def remove_edge(self, node1, node2, bidirectional=False):
+      '''
+      Purpose:  Removes an edge that connects id(node1) to id(node2)
+                Will not look for if the costs of the nodes matches those in the edgelist from before, only checks for id on source and target
 
+      :params:  node1, node2: two SearchNode objects
+                bidirectional: tells if that edge was two-ways or not
+      '''
 
-        if node1 in self._edges:
-            edgelist = self._edges[node1]
-            for i in range(len(edgelist)):
-                edge = edgelist[i]
-                if edge.target == node2:
-                    try:
-                        self._edges[node1].remove(self._edges[node1][i])
-                        # print("Successfully removed edge")
-                    except:
-                        print("Didn't find edge",id(node1),id(node2))
-                        
-                    break
+      if node1 in self._edges:
+          edgelist = self._edges[node1]
+          for i in range(len(edgelist)):
+              edge = edgelist[i]
+              if edge.target == node2:
+                  try:
+                      self._edges[node1].remove(self._edges[node1][i])
+                      # print("Successfully removed edge")
+                  except:
+                      print("Didn't find edge",id(node1),id(node2))
+                  break
 
-        if bidirectional:
-          if node2 in self._edges:
-            edgelist = self._edges[node2]
-            for i in range(len(edgelist)):
-                edge = edgelist[i]
-                if edge.target == node1:
-                    try:
-                        self._edges[node2].remove(self._edges[node2][i])
-                        # print("Successfully removed edge")
-                    except:
-                        print("Didn't find edge",id(node2),id(node1))
-                        
-                    break
-
-
-
-
-
+      if bidirectional:
+        if node2 in self._edges:
+          edgelist = self._edges[node2]
+          for i in range(len(edgelist)):
+              edge = edgelist[i]
+              if edge.target == node1:
+                  try:
+                      self._edges[node2].remove(self._edges[node2][i])
+                      # print("Successfully removed edge")
+                  except:
+                      print("Didn't find edge",id(node2),id(node1))
+                  break
+    ###
     def set_node_positions(self, positions):
         self.node_positions = positions
-
+   
+    ###
     def set_node_pos(self, node, pos):
         """Sets the (x,y) pos of the node, if it exists in the graph."""
         if not node in self:
             raise Exception('Node is noth in graph!')
         self.node_positions[node] = pos
-
+    
+    ###
     def get_node_pos(self, node):
         if not node in self:
             raise Exception('Node is noth in graph!')
         return self.node_positions[node]
-
+    
+    ###
     def node_edges(self, node):
         if not node in self:
             raise Exception('Node is noth in graph!')
         return self._edges.get(node, set())
 
+    ###
     def updateEdges(self,node):
       '''
       Purpose:  when a node has been rewired, its parent has changed. 

@@ -21,7 +21,6 @@ from searchClasses import *
 ###
 def withinBounds(steered_node,bounds):
     return (bounds[0] < steered_node[0] < bounds[2]) and (bounds[1] < steered_node[1] < bounds[3])
-
 ###
 ###
 ###
@@ -58,7 +57,7 @@ def steerPath(firstNode,nextNode,dist):
 
     hori_dist = nextNode[0] - firstNode[0] #signed
     verti_dist = nextNode[1] - firstNode[1] #signed
-    dist = dist
+    dist = 3 * dist
     # a new node that are closer to the next node - always smaller than the boundary-checked nextNode parameter
     # I chose to implement a slow but working solution -> normalize the distance to move. This could easily be changed
     return (firstNode[0] + hori_dist/dist, firstNode[1] + verti_dist/dist)

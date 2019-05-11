@@ -2,6 +2,7 @@ from __future__ import division
 import time
 from support import * # also importing 'utils' and 'searchClasses'
 
+
 ################################
 ################################
 ################################
@@ -10,17 +11,24 @@ from support import * # also importing 'utils' and 'searchClasses'
 ################################
 ################################
 
-plotAll = True
-realTimePlotting = False
-onePath = False
-plotAllFeasible = True
-noFeas = 100
-RRTSTAR = True
-STEERING_FUNCTION = None # None is none, False is kinematic, True is dynamic
-GOAL_BIAS = True
-MAX_ITER = 3000
-NEIGHBORS = 9
-PAUSETIME = 0.1
+### Plotting params
+plotAll           = False
+realTimePlotting  = False
+stepThrough       = False
+onePath           = False
+plotAllFeasible   = False
+noFeas            = 100
+pauseDuration     = 0.001
+rewireDuration    = 0.001
+
+### Config params
+RRTSTAR           = True
+STEERING_FUNCTION = True # None is none, False is kinematic, True is dynamic
+GOAL_BIAS         = True
+GOAL_BIAS_RATE    = 15
+MAX_ITER          = 10000
+MIN_NEIGHBORS     = 4
+MAX_NEIGHBORS     = 30
 
 ################################
 ################################
@@ -35,8 +43,6 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
     # Adding tuples nodes-list -> represent ALL nodes expanded by tree
     nodes = [start_pose]
 
-    # TODO: better to add theta in state than have it as extra parameter all the time    
-    # Searchgraph used
     graph = Graph()
     start_node = SearchNode(start_pose,theta=start_theta)
     graph.add_node(start_node)
@@ -49,16 +55,14 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
     dt = 0.4
     
     # Draw the environment 
-    ax = plot_environment(env,bounds)
+    ax = plot_environment(env,bounds); plot_poly(ax,end_region,'red',alpha=0.2)
     plot_poly(ax,Point(start_pose).buffer(radius,resolution=5),'blue',alpha=.2)
-    plot_poly(ax, end_region,'red', alpha=0.2)
     
-    
-    sampling_rate = 30
+    GOAL_BIAS_RATE = 30
     for i in range(MAX_ITER):  # random high number
         print("Iteration no. ", i) if i%(1000) == 0 else None
 
-        node_rand = getRandomNode(bounds,sampling_rate,i,GOAL_BIAS,end_region)
+        node_rand = getRandomNode(bounds,GOAL_BIAS_RATE,i,GOAL_BIAS,end_region)
 
         node_nearest, node_dist = nearestEuclSNode(graph, node_rand) 
 
@@ -77,19 +81,24 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
                 nodes.append(node_steered.state)
                 graph.add_node(node_steered)
                 node_min = node_nearest
+
+                max_neigh = int(len(graph._nodes))
                 
                 if realTimePlotting:
                   if plotAll:
                     plotNodes(ax,graph)
                     plt.draw()
-                    plt.pause(PAUSETIME)
-                    #input("Drawing nodes")
+                    plt.pause(pauseDuration)
 
                 if RRTSTAR:
-                  k = NEIGHBORS # keep odd to avoid ties
+                  # k = MIN_NEIGHBORS # keep odd to avoid ties
+                  k = max_neigh if i > 200 else int(max_neigh*0.5)
+                  #k = k if k < MAX_NEIGHBORS else MAX_NEIGHBORS
+
                   # this parameter to be updated according to the log shit
                   # look for neighbors when we have enough nodes
-                  if(len(graph._nodes) > k): 
+                  if(len(graph._nodes) > k and k > 0): 
+
                     dist, SN_list = nearestEuclNeighbor(graph,node_steered,k);
 
                     node_min, rel_dist = minimumCostPathFromNeighbors(k, SN_list, node_min, node_steered,env,radius)
@@ -97,9 +106,8 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
                     graph.add_edge(node_min,node_steered,rel_dist)
 
                     if realTimePlotting:
-                      drawEdgesLive(ax,env,bounds,start_node.state,end_region,radius,node_steered,node_min,graph,PAUSETIME,'red')
+                      drawEdgesLive(ax,env,bounds,start_node.state,end_region,radius,node_steered,node_min,graph,pauseDuration,'red')
                       #input("Drawing cheapest edge, iteration" + str(i))
-
 
                     # rewiring the remaining neighbors
                     for j in range(1,k):
@@ -121,16 +129,15 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
                               print("###########    REWIRING at iteration", i)
                               print("###########")
                               print("")
-                              input("Watch the removal and adding process")
+                              if stepThrough:
+                                input("Rewire: removal and adding process")
                               print("Remove node :", node_parent)
                               print("as parent of:", node_near)
                               print("Replace with:", node_steered)
                               print("")
-                              #print("\nEdges from near before replacement:")
-                              #print(graph.node_edges(node_near))
 
                               graph.remove_edge(node_parent,node_near)
-                              drawEdgesLive(ax,env,bounds,start_node.state,end_region,radius,node_steered,node_near,graph,0.01,"green")
+                              drawEdgesLive(ax,env,bounds,start_node.state,end_region,radius,node_steered,node_near,graph,rewireDuration,"green")
 
                               node_near.parent = node_steered
                               node_near.cost = newcost
@@ -138,11 +145,12 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
                               graph.add_edge(node_steered,node_near,dist)
                               # update the edges since node has been changed
                               graph.updateEdges(node_near)
-                              print("\nEdges from near after replacement")
-                              print(graph.node_edges(node_near))
-                              input("Drawing rewire: should have removed edge")
+
+                              if stepThrough:
+                                input("Rewire: should have removed edge")
+                              # continue # use for a bit more orderly
                             else:
-                              # just remove the edge
+                              # just remove the edge, no printing
                               graph.remove_edge(node_parent,node_near)
                               node_near.parent = node_steered
                               node_near.cost = newcost
@@ -151,16 +159,10 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
                               # update the edges since the node has changed
                               graph.updateEdges(node_near)
 
-                            '''
-                            node_near.parent = node_steered
-                            node_near.cost = newcost
-                            dist=eucl_dist(node_steered.state,node_near.state)
-                            graph.add_edge(node_steered, node_near,dist)
-                            '''
-
                             if realTimePlotting:
-                              drawEdgesLive(ax,env,bounds,start_node.state,end_region,radius,node_steered,node_near,graph,0.01,"green")
-                              input("Drawing rewire: added edge")
+                              drawEdgesLive(ax,env,bounds,start_node.state,end_region,radius,node_steered,node_near,graph,rewireDuration,"green")
+                              if stepThrough:
+                                input("Rewire: added edge")
                                                
                   else:
                     # not enough points to begin nearest neighbor yet
@@ -170,13 +172,16 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
                       plotNodes(ax,graph)
                       plotEdges(ax,graph)
                       plt.draw()
-                      plt.pause(PAUSETIME)
-                      # input("Drawing edges")
+                      plt.pause(pauseDuration)
                   
                 else:
                   # No RRT Star - Don't consider nearest or rewiring
                   graph.add_edge(node_nearest,node_steered,node_dist)
 
+                  if realTimePlotting:
+                      plotEdges(ax,graph)
+                      plt.draw()
+                      plt.pause(pauseDuration)
                     
             else:
                  # Avoid goal check if collision is found
@@ -189,9 +194,8 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
         if goalReached(node_steered.state,radius,end_region):  
             goalPath = Path(node_steered)
             goalNodes.append(node_steered)
-            bestPath = Path(node_steered)
 
-            print("Path",len(feasible_paths),", cost:",goalPath.cost,", it:",i)
+            #print("Path",len(feasible_paths),",cost:",goalPath.cost,",it:",i)
 
             if(False):
               plotNodes(ax,graph)
@@ -201,7 +205,7 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
               break
             else:
 
-              sampling_rate = sampling_rate*2 # turn of goal sampling and focus on improving path
+              # GOAL_BIAS_RATE = GOAL_BIAS_RATE*2 # turn of goal sampling and focus on improving path?
 
               if not RRTSTAR:
                 if len(feasible_paths) > noFeas:
@@ -233,7 +237,7 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
                   if realTimePlotting:
                     plt.draw()
                     plt.pause(0.0001)
-                    input("Found path")
+                    input("Found better path")
 
                 else: # not best cost, but update no. of paths found
                   ax.set_title("Best cost out of " + str(len(goalNodes)) + " goal nodes: " + str(bestCost))
@@ -271,8 +275,8 @@ if(plots):
       path, ax = rrt(bounds, environment,start, radius, goal_region,start_theta=np.pi * 0.8)
 
   if(True):
-      #environment = Environment('env_slit.yaml')
-      environment = Environment('env_empty.yaml')
+      environment = Environment('env_slit.yaml')
+      #environment = Environment('env_empty.yaml')
       start = (-1, 3)
       goal_region = Polygon([(11,7), (11,8), (12,8), (12,7)])
       goalPath, ax = rrt(bounds, environment, start, radius, goal_region,start_theta=0)
@@ -289,3 +293,38 @@ ax.set_title("Best cost out of "+ str(goalPath.cost))
 plt.close() if q == 'q' else plt.show()
 
 plt.close()
+
+
+################################
+########## TODO's ##############
+
+# In the rewiring step, we search for nearest neighbors once. that search output a LIST of objects that has their cost. But if there are more than one object in the list that could get their paths updated, and they are both connected, then the second 
+
+# A weird example that might not actually be feasible. x is new node. the lowest right one is the one in 
+
+# (1) The two 2-nearest neighbors of x is the two to the right. Their distances are stored. 
+# 
+# o -- x    o   
+#  \       /
+#   \     o 
+#    \   /
+#     \ /
+#      o
+
+# (2) The 2-nearest neighbor give the middle one as closest, and rewires that to give it a new cost. But notice that the cost of the rightmost will also have changed here, to the better. 
+#
+# o -- x     o
+#  \    \   /
+#   \     o 
+#    \   
+#     \ 
+#      o
+
+# (3) The rewiring will happen anyways, but the rightmost node was evaluated by its old cost! In this case it was obviously shorter to rewire, but could this not be the case in other cases?
+#
+# o -- x -- o   
+#  \    \ 
+#   \    o 
+#    \   
+#     \ 
+#      o
