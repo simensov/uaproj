@@ -1,9 +1,9 @@
 # this file contains regular utilities for length measurement and plotting etc.
-#from support import *
 import yaml
 from sklearn.neighbors import NearestNeighbors
 import random
 import numpy as np
+import math
 from environment import *
 import scipy.interpolate as sinterpol
 from colorama import Fore, Style
@@ -16,7 +16,7 @@ def eucl_dist(a, b):
     """Returns the euclidean distance between a and b."""
     # a is a tuple of (x,y) values of first point
     # b is a tuple of (x,y) values of second point
-    return np.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
+    return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
 
 ###
 ###
@@ -27,6 +27,22 @@ def eucl_dist_noSqrt(a,b):
     Since the sqrt(x) is strictly increasing for all x >0, which also x is ofcourse, then we can sort based on x instead of calculating sqrt(x)
     '''
     return (a[0]-b[0])**2 + (a[1] - b[1])**2
+
+def kin_dist(node1,node2):
+    '''
+    Purpose:    Attempts to achieve a better metric for finding node in graph 
+                that is cheaper to navigate to instead of eucl_dist
+    '''
+    x1,y1 = node1.state
+    x2,y2 = node2.state 
+    dx = x2-x1
+    dy = y2-y1
+
+    # node2 is steered node after steering process, so it has an angle
+    abs_angle = math.fabs(node1.theta - node2.theta)
+    angle_cost = abs_angle**2 / (2*math.pi)
+
+    return math.sqrt( dx**2 + dy**2 +  angle_cost)
 
 ###
 ###
@@ -163,3 +179,23 @@ def drawEdgesLive(ax,environment,bounds,start_pos,end_region,radius,node_steered
     plotEdges(ax,graph)
     plt.draw()
     plt.pause(seconds)
+
+###
+###
+###
+def drawEdgesLiveLite(ax,env,radius,node_steered,new_node,graph, color="green"):
+    left, right = ax.get_xlim()  # return the current xlim
+    bottom, top = ax.get_ylim()  # return the current xlim
+    ax.cla()
+
+
+    plotNodes(ax,graph)
+    # plot_environment_on_axes(ax,env)
+    plot_poly(ax,Point(node_steered.state).buffer(radius/2,resolution=5),'blue',alpha=.6)
+    plot_poly(ax,Point(new_node.state).buffer(radius/2,resolution=5),color =color,alpha=.8)
+
+    plotEdges(ax,graph)
+    ax.set_xlim(left,right)
+    ax.set_ylim(bottom,top)
+    plt.draw()
+    plt.pause(0.01)

@@ -5,18 +5,7 @@
 from utils import *
 # Contains SearchNode, Graph, Edge, Path classes
 from searchClasses import *
-
 import math
-
-##############################################
-##############################################
-##############################################
-##############################################
-# ----         Implementations          ---- #
-##############################################
-##############################################
-##############################################
-##############################################
 
 ###
 ###
@@ -131,26 +120,18 @@ def bicycleKinematicsRK4(initState,theta,v,L,delta):
     k1x = v * np.cos(theta)
     k1y = v * np.sin(theta)
     
-    # k2t = v/L * np.tan(delta)
     k2x = v * np.cos(theta + k1t/2)
     k2y = v * np.sin(theta + k1t/2)
 
-    # k3t = v/L * np.tan(delta)
     k3x = v * np.cos(theta + k1t/2)
     k3y = v * np.sin(theta + k1t/2)
 
     k4x = v * np.cos(theta + k1t)
     k4y = v * np.sin(theta + k1t)
 
-    '''
-    t = theta + k1t * dt # no effect since it is constant
-    x = x0 + (k1x + 2*(k2x + k3x) + k4x)*dt/6
-    y = y0 + (k1y + 2*(k2y + k3y) + k4y)*dt/6
-    return (x,y,t) 
-    '''
     dx = (k1x + 2*(k2x + k3x) + k4x) / 6
     dy = (k1y + 2*(k2y + k3y) + k4y) / 6
-    dth = k1t
+    dth = k1t # has no effect throughout; kjt is equal to k1t for all j
 
     return (dx,dy,dth)
 
@@ -159,8 +140,7 @@ def bicycleKinematicsRK4(initState,theta,v,L,delta):
 ### 
 def steerBicycleWithKinematics(firstNode,theta,nextNode,dt):
     '''
-    TODO: The sexiest thing to do here would be to make a bicycle class
-    Purpose:    Tests implementation of kinematic constraints by using a simple bicycle model
+    Purpose:  Steer the kinematic bicycle model from firstNode towards nextNode
 
     TODO: if delta could be stored, a more realistic implementation would be to constrain delta considering the steering angle already made!
 
@@ -190,8 +170,9 @@ def steerBicycleWithKinematics(firstNode,theta,nextNode,dt):
 ### 
 def steerBicycleWithDynamics(firstNode,theta,nextNode,dt,velocity):
     '''
-    Incorporates dynamic constraints on simple bicycle model
-    Note that (x,y)-position is now calculated from CG instead of back wheel as in the kinematic version
+    Purpose:  Incorporates dynamic constraints on simple bicycle model
+              Note that (x,y)-position is now calculated from CG instead of back wheel as in the kinematic version
+              Model used is from [Pepy, Lambert, Mounier: 2006]
     
     :params:    firstNode (tuple(floats)): x,y pos of back wheel before
                 nextNode  (tuple(floats)): x,y pos of back wheel next
@@ -209,17 +190,17 @@ def steerBicycleWithDynamics(firstNode,theta,nextNode,dt,velocity):
     Istd = (1**2 + 0.2**2) * mstd / 12
     tire_radius_std = 0.33 * Lstd
 
-    # Scale to wanted length (not necessarily linear scaling of mass etc IRL)
+    # Scale to wanted length (course estimation to fit the test environment)
     scale = L / Lstd
     m = scale * mstd
     I = scale * Istd
     tire_radius = scale * tire_radius_std
 
 
-    # TODO: this should absolutely be in relation to the previous angle to avoid. What needs to be done is to set a max on the rate of change of delta. Should be a very easy fix 
+    # TODO: this should be done by an incremental change to the previous angle to avoid zigzag steering. What needs to be done is to set a max on the rate of change of delta. This means incorporation an extra state, but sould be a very easy fix 
     delta = calculateSteeringAngle(firstNode,theta,nextNode,L,maxx=np.pi/20)
 
-    # vx is velocity ALONG STRAIGHT FORWARD AXIS
+    # vx is velocity in direction of theta
     # vy is lateral velocity of cg (can move sideways if vx > 0 and delta != 0)
     # dth is rate of change of orientation vs x-axis
     # velocity at firstNode
@@ -383,7 +364,8 @@ def steerWithQuadcopterDynamics(searchNode, nextNode, dt):
 ### 
 def obstacleIsInPath(firstNode,nextNode,env,radius):
     '''
-    :returns:   a boolean for collision or not
+    Purpose:  Checks for an obstacle in line between firstNode and nextNode
+    :returns: A boolean for collision or not
     '''
 
     # Point from shapely
@@ -414,20 +396,24 @@ def goalReached(node,radius,end_region):
     # returns a boolean for node tuple + radius inside the region
     return end_region.contains(Point(node))
 
-
 ###
 ###
 ###
-def nearestEuclNeighbors(graph, newNode, k, ETA, no_nodes):
-    # returning tuple in nodeList that is closest to newNode
+def getMaximumNeighborRadius(ETA,no_nodes):
+  return ETA * math.sqrt(math.log(no_nodes) / no_nodes)
+###
+###
+###
+def nearestNeighbors(s_f, graph, newNode, k, ETA, no_nodes, radius=0.2):
     '''
-    graph is Graph object
-    newNode is a SearchNode
+    Purpose:  find tuple in graph that is closest to newNode
+    
+    :params:  s_f is steering function choice TODO: how to use it?
+              graph is Graph object
+              newNode is a SearchNode
     '''
 
     # Get all nearest neighbors according to number to look for, and use the computationally inefficient way of keeping calculations down from Karaman, 2013, RRT star for nonholonomic constraints by maximuzing radii to look within a ball 
-
-    radius = ETA*math.sqrt(math.log(no_nodes)/ no_nodes)
 
     states = []
     it = 0
@@ -442,8 +428,6 @@ def nearestEuclNeighbors(graph, newNode, k, ETA, no_nodes):
     nbrs = NearestNeighbors(n_neighbors=k, radius=radius, algorithm='ball_tree').fit(X)
     distances, indices = nbrs.kneighbors(X)
 
-    # pick relevant ones
-    # dist = distances[loc_pos]
     SN_list = [graph._nodes[ind] for ind in indices[loc_pos]]
 
     return SN_list
@@ -451,19 +435,23 @@ def nearestEuclNeighbors(graph, newNode, k, ETA, no_nodes):
 ###
 ### 
 ### 
-def minCostPath(k,SN_list,node_min,node_steered,env,r):
+def minCostPath(s_f,k,SN_list,node_min,node_steered,env,r, max_rad=0.2):
   '''
   Purpose:  Finds the node that contributes to the cheapest path out of the 
             k-1 nearest neighbors
 
   '''
 
-
   # For all neighbors, add the steered node at the spot where it contributes to the lowest cost. Start counting at 1 since pos 0 is the node itself
   for j in range(1,k):
     node_near = SN_list[j]
     if not obstacleIsInPath(node_near.state, node_steered.state, env,r):
-      cost_near=node_near.cost+eucl_dist(node_near.state,node_steered.state)
+
+      if s_f == None:
+        cost_near=node_near.cost+eucl_dist(node_near.state,node_steered.state)
+      if s_f == False:
+        cost_near=node_near.cost+kin_dist(node_near,node_steered)
+
       if cost_near < node_steered.cost:
         node_min = node_near
 
@@ -478,7 +466,7 @@ def minCostPath(k,SN_list,node_min,node_steered,env,r):
 ###
 ###
 ###
-def rewire(graph, node_min, node_steered, env, radius, SN_list, k):
+def rewire(ax, graph, node_min, node_steered, env, radius, SN_list, k, max_r):
   '''
   Purpose:  Rewires graph to remove sub-optimal cost paths for k nearest 
             neighbors
@@ -488,14 +476,15 @@ def rewire(graph, node_min, node_steered, env, radius, SN_list, k):
 
     if node_near is not node_min:
       if not obstacleIsInPath(node_near.state, node_steered.state,env,radius):
-        newcost=node_steered.cost+eucl_dist(node_steered.state,node_near.state)
+        newcost = node_steered.cost+eucl_dist(node_steered.state,node_near.state)
 
-        if (node_near.cost > newcost):
-          # remove parenthood and edge with old parent
+        if newcost < node_near.cost:
           node_parent = node_near.parent
           graph.remove_edge(node_parent,node_near)
           node_near.parent = node_steered
           node_near.cost = newcost
           dist = eucl_dist(node_steered.state,node_near.state)
           graph.add_edge(node_steered,node_near,dist)
-          graph.updateEdges(node_near) # update edges: the node has changed
+          graph.updateEdges(node_near) # the node cost has changed
+
+          #drawEdgesLiveLite(ax,env,radius,node_steered,node_near,graph,color="green")  

@@ -11,9 +11,9 @@ from support import * # also importing 'utils' and 'searchClasses'
 ################################
 
 ### Plotting params
-plotAll           = True
-realTimePlotting  = True
-stepThrough       = True
+plotAll           = False
+realTimePlotting  = False
+stepThrough       = False
 onePath           = False
 plotAllFeasible   = False
 noFeas            = 100
@@ -21,10 +21,15 @@ pauseDuration     = 0.001
 rewireDuration    = 0.001
 
 ### Config params
-RRTSTAR           = False
+RRTSTAR           = True
+INFORMED          = False 
+# TODO: reduce sample region once goal has been found
+# Create line between start and end to get angle
+# Then, use a "margin"-definition to find the points furthest away in the local coordinate system! Create ellipse based on this
+
 STEERING_FUNCTION = False # None is none, False is kinematic, True is dynamic
 GOAL_BIAS         = True
-GOAL_BIAS_RATE    = 15
+GOAL_BIAS_RATE    = 30
 MAX_ITER          = 5000
 MIN_NEIGH         = 3
 MAX_NEIGH         = 50
@@ -41,7 +46,7 @@ DT                = 0.1
 
 printRRT()
 
-def rrt(bounds, env, start_pos, radius, end_region, start_theta=3.14):
+def rrt(ax, bounds, env, start_pos, radius, end_region, start_theta=3.14):
 
     # Adding tuples nodes-list -> represent ALL nodes expanded by tree
     nodes = [start_pos]
@@ -60,7 +65,7 @@ def rrt(bounds, env, start_pos, radius, end_region, start_theta=3.14):
 
         node_rand = getRandomNode(bounds,GOAL_BIAS_RATE,i,GOAL_BIAS,end_region)
         node_nearest, node_dist = nearestEuclSNode(graph, node_rand) 
-        steered_state,steered_theta,steered_velocity = steeringFunction(STEERING_FUNCTION, node_nearest,node_rand,node_dist,DT,ETA)
+        steered_state,steered_theta,steered_velocity = steeringFunction(STEERING_FUNCTION,node_nearest,node_rand,node_dist,DT,ETA)
 
         if not withinBounds(steered_state,bounds):
           continue
@@ -85,22 +90,33 @@ def rrt(bounds, env, start_pos, radius, end_region, start_theta=3.14):
                   if (no_nodes > k and k > 0): 
 
                     # Find node that connects to node_steered through the cheapest collision-free path
-                    SN_list = nearestEuclNeighbors(graph,node_steered,k, ETA, no_nodes)
+                    max_n_radius = getMaximumNeighborRadius(ETA,no_nodes)
 
-                    node_min,rel_dist = minCostPath(k,SN_list,node_min,node_steered,env,radius)
+                    SN_list = nearestNeighbors(STEERING_FUNCTION,graph,node_steered,k, ETA, no_nodes, max_n_radius)
+
+                    node_min,rel_dist = minCostPath(STEERING_FUNCTION,k,SN_list,node_min,node_steered,env,radius)
 
                     graph.add_edge(node_min,node_steered,rel_dist)
 
                     # Rewiring the remaining neighbors
-                    rewire(graph,node_min,node_steered,env,radius,SN_list,k)
+                    rewire(ax,graph,node_min,node_steered,env,radius,SN_list,k,max_n_radius)
+
 
                   else:
                     # Not enough points to begin nearest neighbor yet
                     graph.add_edge(node_nearest,node_steered,node_dist)
+       
                                       
                 else:
                   # No RRT Star - Don't consider nearest or rewiring
                   graph.add_edge(node_nearest,node_steered,node_dist)
+
+                  if plotAll and realTimePlotting:
+                    ax.plot( [node_min.state[0], node_steered.state[0]], [node_min.state[1], node_steered.state[1]])
+                    plt.draw()
+                    plt.pause(0.01)
+
+
                     
             else:
                 # Avoid goal check if collision is found
@@ -136,11 +152,14 @@ def rrt(bounds, env, start_pos, radius, end_region, start_theta=3.14):
 
               if not RRTSTAR and not onePath:
                 # Restart search and continue as long as the iterations allows
-                nodes = [start_pos]
+                nodes = [graphstart_pos]
                 graph = Graph()
                 graph.add_node(SearchNode(start_pos,theta=start_theta))
                 goalPath = Path(SearchNode(start_pos,theta=start_theta))
 
+    print("Plotting all edges")
+    if plotAll:
+      plotEdges(ax,graph)
     return bestPath
 
 ################################
@@ -154,25 +173,28 @@ def rrt(bounds, env, start_pos, radius, end_region, start_theta=3.14):
 plots = True
 if(plots):
   radius = 0.3
-  bounds = (-2, -3, 12, 8)
+  xmin = -2; ymin = -3; xmax = 12; ymax = 8
+  bounds = (xmin,ymin,xmax,ymax)
   goal_region = Polygon([(10,5), (10,6), (11,6), (11,5)])
 
-  environment = Environment('env_slit.yaml')
-  #environment = Environment('env_empty.yaml')
+  #environment = Environment('env_slit.yaml')
+  environment = Environment('env_empty.yaml')
   start = (-1, 3)
   goal_region = Polygon([(11,7), (11,8), (12,8), (12,7)])
   st = time.time()
-  goalPath=rrt(bounds,environment,start,radius,goal_region,start_theta=0)
 
+  ax = plot_environment(environment,bounds)
+  ax.set_xlim(xmin,xmax)
+  ax.set_ylim(ymin,ymax)
+
+  goalPath=rrt(ax,bounds,environment,start,radius,goal_region,start_theta=0)
 
 print("Took", time.time() - st , "seconds. Plotting...")
-plotInFunction = False
 
-ax = plot_environment(environment,bounds)
 plot_poly(ax,Point(start).buffer(radius,resolution=5),'blue',alpha=.2)
 plot_poly(ax, goal_region,'red', alpha=0.2)
 plotListOfTuples(ax,goalPath.path)
-ax.set_title("Best cost out of "+ str(goalPath.cost))
+ax.set_title("Best cost: "+ str(goalPath.cost))
 
 q = input("Goal path should be found with cost " + str(goalPath.cost) +"\n Enter 'q' for anything else then plotting goalpath")
 
