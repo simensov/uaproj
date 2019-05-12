@@ -49,37 +49,6 @@ def nearestEuclSNode(graph, newNode):
 ###
 ###
 ###
-def nearestEuclNeighbor(graph, newNode, k):
-    # returning tuple in nodeList that is closest to newNode
-    '''
-    graph is Graph object
-    newNode is a SearchNode
-    '''
-    states = []
-    it = 0
-    loc_pos = 0
-    for node in graph._nodes:
-        states.append([node.state[0],node.state[1]])
-        if node.state == newNode.state:
-            loc_pos = it
-        it += 1
-
-    X = np.array(states)
-    nbrs = NearestNeighbors(n_neighbors=k, algorithm='ball_tree').fit(X)
-    distances, indices = nbrs.kneighbors(X)
-
-    # pick relevant ones
-    dist = distances[loc_pos]
-    indi = indices[loc_pos]
-    SN_list = []
-    for ind in indi:
-        SN_list.append(graph._nodes[ind])
-
-    return dist, SN_list
-
-###
-###
-###
 def plot_line_mine(ax, line,width=2,color='black'):
     # wanted to draw lines in path more clearly. gathered format from environment.py
     x, y = line.xy
@@ -188,8 +157,8 @@ def drawEdgesLive(ax,environment,bounds,start_pos,end_region,radius,node_steered
     plot_environment_on_axes(ax,environment,bounds)
     plot_poly(ax,Point(start_pos).buffer(radius,resolution=5),'blue',alpha=.2)
     plot_poly(ax, end_region,'red', alpha=0.2)
-    plot_poly(ax,Point(node_steered.state).buffer(radius/3,resolution=5),'blue',alpha=.6)
-    plot_poly(ax,Point(new_node.state).buffer(radius/3,resolution=5),colorOnOther,alpha=.8)
+    plot_poly(ax,Point(node_steered.state).buffer(radius/2,resolution=5),'blue',alpha=.6)
+    plot_poly(ax,Point(new_node.state).buffer(radius/2,resolution=5),colorOnOther,alpha=.8)
     plotEdges(ax,graph)
     plt.draw()
     plt.pause(seconds)

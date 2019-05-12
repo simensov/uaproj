@@ -6,6 +6,8 @@ from utils import *
 # Contains SearchNode, Graph, Edge, Path classes
 from searchClasses import *
 
+import math
+
 ##############################################
 ##############################################
 ##############################################
@@ -48,19 +50,35 @@ def getRandomNode(bounds,sampling_rate,iteration,goal_bias,end_region,ellipse=No
 ###
 ###
 ###
-def steerPath(firstNode,nextNode,dist):
-    # tuples as input - distance between them gives ish distance to move
+def steerPath(firstNode,nextNode,dist,eta=0.5):
+    '''
+    Purpose:    A super naive way of steering towards a sampled point
+
+    :params:    tuples as input, dist between them gives ish distance to move
+                eta is a float bounding:
+                    eta <= epsilon, where |x1-x2| < eta for all steering |x1 - steer(x1,x2)| < epsilon
+
+
+    '''
 
     # avoiding errors when sampling node is too close
     if dist == 0:
         dist = 100000
 
     hori_dist = nextNode[0] - firstNode[0] #signed
-    verti_dist = nextNode[1] - firstNode[1] #signed
-    dist = 3 * dist
-    # a new node that are closer to the next node - always smaller than the boundary-checked nextNode parameter
-    # I chose to implement a slow but working solution -> normalize the distance to move. This could easily be changed
-    return (firstNode[0] + hori_dist/dist, firstNode[1] + verti_dist/dist)
+    vert_dist = nextNode[1] - firstNode[1] #signed
+    dist = 2 * dist # originally used to divide hori_dist and vert_dist on
+
+    if False:
+        if math.sqrt(hori_dist**2 + vert_dist**2) > eta:
+            angle = np.arctan2(vert_dist,hori_dist)
+            hori_dist = eta * np.cos(angle)
+            vert_dist = eta * np.sin(angle)
+
+        return (firstNode[0] + hori_dist, firstNode[1] + vert_dist)
+
+    else:
+        return (firstNode[0] + hori_dist/dist, firstNode[1] + vert_dist/dist)
 
 
 
@@ -256,12 +274,12 @@ def steerBicycleWithDynamics(firstNode,theta,nextNode,dt,velocity):
 ###
 ### 
 ### 
-def steeringFunction(steer_f, node_nearest,node_rand,node_dist,dt):
+def steeringFunction(steer_f, node_nearest,node_rand,node_dist,dt,eta=0.5):
     steered_velocity = (0.5,0.0,0.0)
     steered_theta = 0
 
     if steer_f == None:
-      steered_node = steerPath(node_nearest.state, node_rand,node_dist)
+      steered_node = steerPath(node_nearest.state, node_rand,node_dist,eta)
 
     if steer_f == False:
       # kinematic model
@@ -396,27 +414,88 @@ def goalReached(node,radius,end_region):
     # returns a boolean for node tuple + radius inside the region
     return end_region.contains(Point(node))
 
+
+###
+###
+###
+def nearestEuclNeighbors(graph, newNode, k, ETA, no_nodes):
+    # returning tuple in nodeList that is closest to newNode
+    '''
+    graph is Graph object
+    newNode is a SearchNode
+    '''
+
+    # Get all nearest neighbors according to number to look for, and use the computationally inefficient way of keeping calculations down from Karaman, 2013, RRT star for nonholonomic constraints by maximuzing radii to look within a ball 
+
+    radius = ETA*math.sqrt(math.log(no_nodes)/ no_nodes)
+
+    states = []
+    it = 0
+    loc_pos = 0
+    for node in graph._nodes:
+        states.append([node.state[0],node.state[1]])
+        if node.state == newNode.state:
+            loc_pos = it
+        it += 1
+
+    X = np.array(states)
+    nbrs = NearestNeighbors(n_neighbors=k, radius=radius, algorithm='ball_tree').fit(X)
+    distances, indices = nbrs.kneighbors(X)
+
+    # pick relevant ones
+    # dist = distances[loc_pos]
+    SN_list = [graph._nodes[ind] for ind in indices[loc_pos]]
+
+    return SN_list
+
 ###
 ### 
 ### 
-def minimumCostPathFromNeighbors(k,SN_list,node_min,node_steered,env,radius):
+def minCostPath(k,SN_list,node_min,node_steered,env,r):
+  '''
+  Purpose:  Finds the node that contributes to the cheapest path out of the 
+            k-1 nearest neighbors
 
-   # for all neighbors, add the steered node at the spot where it contributes to the lowest cost
-    # start counting at 1 since pos 0 is the node itself
-    for j in range(1,k):
-      node_near = SN_list[j]
+  '''
 
-      if not obstacleIsInPath(node_near.state, node_steered.state, env,radius):
 
-        cost_near=node_near.cost+eucl_dist(node_near.state,node_steered.state)
+  # For all neighbors, add the steered node at the spot where it contributes to the lowest cost. Start counting at 1 since pos 0 is the node itself
+  for j in range(1,k):
+    node_near = SN_list[j]
+    if not obstacleIsInPath(node_near.state, node_steered.state, env,r):
+      cost_near=node_near.cost+eucl_dist(node_near.state,node_steered.state)
+      if cost_near < node_steered.cost:
+        node_min = node_near
 
-        if cost_near < node_steered.cost:
-          node_min = node_near
+  # Update parent and cost accordingly
+  node_steered.parent = node_min
+  relative_distance = eucl_dist(node_min.state,node_steered.state)
+  newcost = node_min.cost + relative_distance
+  node_steered.cost = newcost
 
-    # update parent and cost accordingly. Has been tested with prints and plots and should be working fine!
-    node_steered.parent = node_min
-    rel_dist = eucl_dist(node_min.state,node_steered.state)
-    newcost = node_min.cost + rel_dist
-    node_steered.cost = newcost
+  return node_min, relative_distance
 
-    return node_min, rel_dist
+###
+###
+###
+def rewire(graph, node_min, node_steered, env, radius, SN_list, k):
+  '''
+  Purpose:  Rewires graph to remove sub-optimal cost paths for k nearest 
+            neighbors
+  '''
+  for j in range(1,k):
+    node_near = SN_list[j]
+
+    if node_near is not node_min:
+      if not obstacleIsInPath(node_near.state, node_steered.state,env,radius):
+        newcost=node_steered.cost+eucl_dist(node_steered.state,node_near.state)
+
+        if (node_near.cost > newcost):
+          # remove parenthood and edge with old parent
+          node_parent = node_near.parent
+          graph.remove_edge(node_parent,node_near)
+          node_near.parent = node_steered
+          node_near.cost = newcost
+          dist = eucl_dist(node_steered.state,node_near.state)
+          graph.add_edge(node_steered,node_near,dist)
+          graph.updateEdges(node_near) # update edges: the node has changed
