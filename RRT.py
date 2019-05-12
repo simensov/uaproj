@@ -2,7 +2,6 @@ from __future__ import division
 import time
 from support import * # also importing 'utils' and 'searchClasses'
 
-
 ################################
 ################################
 ################################
@@ -22,15 +21,15 @@ pauseDuration     = 0.001
 rewireDuration    = 0.001
 
 ### Config params
-RRTSTAR           = True
-STEERING_FUNCTION = None # None is none, False is kinematic, True is dynamic
+RRTSTAR           = False
+STEERING_FUNCTION = False # None is none, False is kinematic, True is dynamic
 GOAL_BIAS         = True
 GOAL_BIAS_RATE    = 15
-MAX_ITER          = 1000
+MAX_ITER          = 5000
 MIN_NEIGH         = 3
 MAX_NEIGH         = 50
 ETA               = 0.5
-DT                = 0.4
+DT                = 0.1
 
 ################################
 ################################
@@ -42,13 +41,13 @@ DT                = 0.4
 
 printRRT()
 
-def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
+def rrt(bounds, env, start_pos, radius, end_region, start_theta=3.14):
 
     # Adding tuples nodes-list -> represent ALL nodes expanded by tree
-    nodes = [start_pose]
+    nodes = [start_pos]
 
     graph = Graph()
-    start_node = SearchNode(start_pose,theta=start_theta)
+    start_node = SearchNode(start_pos,theta=start_theta)
     graph.add_node(start_node)
     goalPath = Path(start_node)
     bestPath = goalPath
@@ -137,10 +136,10 @@ def rrt(bounds, env, start_pose, radius, end_region, start_theta=3.14):
 
               if not RRTSTAR and not onePath:
                 # Restart search and continue as long as the iterations allows
-                nodes = [start_pose]
+                nodes = [start_pos]
                 graph = Graph()
-                graph.add_node(SearchNode(start_pose,theta=start_theta))
-                goalPath = Path(SearchNode(start_pose,theta=start_theta))
+                graph.add_node(SearchNode(start_pos,theta=start_theta))
+                goalPath = Path(SearchNode(start_pos,theta=start_theta))
 
     return bestPath
 
@@ -165,7 +164,6 @@ if(plots):
   st = time.time()
   goalPath=rrt(bounds,environment,start,radius,goal_region,start_theta=0)
 
-# important detail!!! don't use the cost of the last searchnode as final cost. That cost was the cost of the path the searchnode was a part of when it found the goal the first time, but the path might have changed after that, so the distance metric is used to readjust the path cost when a Path.cost is called!
 
 print("Took", time.time() - st , "seconds. Plotting...")
 plotInFunction = False

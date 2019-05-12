@@ -39,10 +39,11 @@ def nearestEuclSNode(graph, newNode):
     dist = eucl_dist((-10000,-10000),(10000,10000)) # huge distance
     for i in graph._nodes: # iterating through a set. i becomes a SEARCH NODE
         newdist = eucl_dist_noSqrt(i.state, newNode)
-        if newdist < dist: #SEARCH NODE.state is a tuple
-           nearestNodeInGraph = i # a search
-           dist = newdist
-           newdistout = eucl_dist(i.state, newNode)
+        if newdist <= dist: #SEARCH NODE.state is a tuple
+            # changed to <= because in some cases, this search only sampled the startnode, with no velocity obviously, so nothing would move
+            nearestNodeInGraph = i # a search
+            dist = newdist
+            newdistout = eucl_dist(i.state, newNode)
 
     return nearestNodeInGraph, newdistout
 
@@ -106,11 +107,11 @@ def plot_bspline(ax,x,y,bounds,sn=100):
 ###
 ###
 ###
-def plotListOfTuples(ax,tupleList):
+def plotListOfTuples(ax,tupleList,width=2, color="green"):
   for i in range(len(tupleList)-1):
     x = tupleList[i][0], tupleList[i+1][0]
     y = [tupleList[i][1], tupleList[i+1][1]]
-    ax.plot(x,y, linewidth=2, color="green")
+    ax.plot(x, y, linewidth = width, color = color)
 
 ###
 ###

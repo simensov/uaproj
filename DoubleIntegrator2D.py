@@ -1,20 +1,15 @@
-from __future__ import division
-from matplotlib import pyplot as plt
-import numpy as np
-import yaml
-from shapely.geometry import Point, Polygon, LineString, box
-from environment import Environment, plot_environment, plot_line, plot_poly
-import time
+# TODO: Suddently acts very weird. 30 min debugging in the steering function didn't help me. One problem seems to be that the several nodes are being sampled in the goal region initially since u only increase acceleration and not velocity momentarily, so the first nodes are sampled to be in the start position. when the nearest neighbor was asmpled to be the start node, everything just stayed zero. But giving start velocity fixed that. Adjusting the max vel etc perfectly made the node find the goal sometimes, but if it didn't, it never expanded the tree. Very strange, need to figure out why the tree only seemed to grow in the direction of the first node
 
 from support import *
+import time
 
-TIMESTEP = 0.2
+TIMESTEP = 0.1
 GRAVITY  = 9.8
-MAX_ITER = 10000
+MAX_ITER = 4000
 PLOTS = True
 REALTIME = False
 ANIMATE = False
-GOAL_SAMPLING_RATE = 40
+GOAL_SAMPLING_RATE = 30
 
 class DoubleIntegrator2D(SearchNode):
 
@@ -24,8 +19,8 @@ class DoubleIntegrator2D(SearchNode):
     cost        = 0.0,
     u           = (0,0),
     mass        = 10.,
-    max_thrust  = 1,
-    max_vel     = 1.,
+    max_thrust  = 0.5,
+    max_vel     = 1,
     iteration   = 0,
     dt          = TIMESTEP,
     gravity     = GRAVITY):
@@ -100,9 +95,6 @@ def steerDoubleIntegrator2D(node_nearest, node_rand):
   u1 = np.cos(theta) * node_nearest.max_thrust
   u2 = np.sin(theta) * node_nearest.max_thrust
 
-  #u1 = node_nearest.max_thrust
-  #u2 = node_nearest.max_thrust
-
   dXdt,dYdt,dVxdt,dVydt = node_nearest.calcF((u1,u2))
 
   vxnew = vx + dVxdt * TIMESTEP
@@ -111,10 +103,10 @@ def steerDoubleIntegrator2D(node_nearest, node_rand):
   ynew = y + dYdt * TIMESTEP
 
   if np.fabs(vxnew) > node_nearest.max_vel:
-    u1 = -u1
+    u1 = -u1*0.2
 
-  if np.fabs(vy) > node_nearest.max_vel:
-    u2 = -u2
+  if np.fabs(vynew) > node_nearest.max_vel:
+    u2 = -u2*0.2
 
   dXdt,dYdt,dVxdt,dVydt = node_nearest.calcF((u1,u2))
   vxnew = vx + dVxdt * TIMESTEP
@@ -182,15 +174,16 @@ def rrtDoubleIntegrator2D(bounds,environment,start_state,radius,end_regions):
     #print("Rand", node_rand)
     #print("Near", node_nearest.getStates())
     steered_state, steered_u = steerDoubleIntegrator2D(node_nearest, node_rand)
-    #print("Steer", steered_state)
+    #print("Steer", steered_state, steered_u)
     
     if not (bounds[0] < steered_state[0] < bounds[2]) or not (bounds[1] < steered_state[1] < bounds[3]):
       continue
 
+    node_dist = eucl_dist(node_nearest.state,steered_state)
     node_steered = DoubleIntegrator2D(steered_state,node_nearest,node_nearest.cost+node_dist, u=steered_u)
 
     # Seems like it is performing better if allowed to not check for existence
-    if True or node_steered.state not in nodes:
+    if node_steered.state not in nodes:
       if not obstacleIsInPath(node_nearest.getPos(), node_steered.getPos(), environment,radius):                
 
         nodes.append(node_steered.state)
@@ -226,24 +219,11 @@ def rrtDoubleIntegrator2D(bounds,environment,start_state,radius,end_regions):
 ##########################################
 ##########################################
 
+environment = Environment('env_empty.yaml')
 radius = 0.3
 bounds = (-2, -3, 12, 8)
-end_region = Polygon([(10,5), (10,6), (11,6), (11,5)])
-
-if(False):
-    # SUPERSIMPLE
-    environment = Environment('supersimple.yaml')
-    start = (0,0,0,0)
-
-if(False):
-    # COMPARABLE TO QUADWORLD
-    environment = Environment('env_superbug.yaml')
-    start = (0,0,0,0)
-
-if(True):
-    environment = Environment('env_slit.yaml')
-    end_region = Polygon([(10,4), (10,5), (11,5), (11,4)])
-    start = (-1,4,0,0)
+end_region = Polygon([(10,4), (10,5), (11,5), (11,4)])
+start = (-1,4,0.01,0)
 
 
 '''
@@ -252,10 +232,10 @@ plot_poly(ax,Point(start).buffer(radius,resolution=5),'blue',alpha=.2)
 plot_poly(ax, end_region,'red', alpha=0.2)
 '''
 
-goalPath, nodes, i, transitions = rrtDoubleIntegrator2D(bounds, environment,start, radius, end_region)
+goalPath, nodes, iterations, transitions = rrtDoubleIntegrator2D(bounds, environment,start, radius, end_region)
 
 
-for i in range(len(goalPath.path)):
-  print(goalPath.path[i] , "---" , goalPath.inputs[i])
+for j in range(len(goalPath.path)):
+  print(goalPath.path[j] , "---" , goalPath.inputs[j])
 
 plt.show()

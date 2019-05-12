@@ -1,25 +1,26 @@
-import numpy as np
+# SimplePendulum.py
+# Implements the swing up procedure for a simple pendulum with damping by using RRT
+
+# Should be good to go unless I want to clean it somewhat
+
+from support import * 
 from numpy import sin,cos
-import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from support import * # SearchNode class for example
 import time
-
-import yaml
-from shapely.geometry import Point, Polygon, LineString, box
-from colorama import Fore, Style
-
-#print(f'This is {Fore.GREEN} color {Style.RESET_ALL}!')
 
 TIMESTEP = 0.05
 GRAVITY  = 9.8
-MAX_ITER = 30000
-PLOTS    = False
-ANIMATE  = True
+MAX_ITER = 10001
+PLOTS    = True
+ANIMATE  = False
 DAMPING  = True
+PLOTPORTION = 1.0
 
 np.random.seed()
 
+###
+### SimplePendulum class
+###
 class SimplePendulum(SearchNode):
 
   def __init__(self,
@@ -28,8 +29,8 @@ class SimplePendulum(SearchNode):
     cost        = 0.0,
     u           = 0.0,
     length      = 0.5,
-    mass        = 1,
-    max_torque  = 1.0,
+    mass        = 1.0,
+    max_torque  = 0.5,
     iteration   = 0,
     dt          = TIMESTEP,
     gravity     = GRAVITY,
@@ -65,10 +66,13 @@ class SimplePendulum(SearchNode):
   ###
   ###
   def calcF(self,u):
-    self.u = u # commented out since node is initialized anyways
+    '''
+    Purpose:  calculate xdot = f(x,u)
+
+    '''
+    self.u = u 
     vel=self.state[1]
-    # From [Branicky, 2002: 'Nonlinear and Hybrid Control via RRTs']:
-    #second=-3*self.g*sin(self.state[0])/(2*self.length) - 3*self.u/(self.m*self.length**2)
+
     # From Underactuated notes: gives much better plots
     accel=-self.g*sin(self.state[0])/(self.length) + u/(self.m*self.length**2)
 
@@ -115,28 +119,40 @@ def pendulumHasReachedGoal(node,radius,end_regions):
 ###
 def steerPendulum(node_nearest, node_rand):
   '''
+  Purpose   Steers pendulum towars node_rand. Updates parameters wit forward 
+            euler integration
   :params:  node_nearest is SimplePendulum object
             node_rand is th,thdot values of random sampled point in state space
   '''
   tmax = node_nearest.max_torque
+  th, thdot = node_nearest.getStates()
+  diffTheta =  node_rand[0] - th
+  diffVel = node_rand[1] - thdot
 
-  u = 0
+  if diffTheta > 0: # sampled angle is further anti-clockwise
+    if diffVel > 0: # sampled velocity is larger than current
+      u = tmax      # we want to continue this way - add positive torque
+    else: 
+      u = -tmax     # sampled velocity is smaller - we must reduce u
+  else:             # sampled angle is further clockwise
+    if diffVel < 0: # sampled angle has larger velocity anti clockwise
+      u = -tmax     # inflict torque anti clockwise
+    else:
+      u = tmax
+
+  ''' Old method that made the node_rand samping stupid
   if not (node_nearest.iteration % 3):
-    u = random.choice( [-tmax,0,tmax]) # Random int. TODO this seems stupid. Must be based on node_rand? But works
+    u = random.choice( [-tmax,0,tmax]) 
     node_nearest.iteration += 1
   else:
     u = node_nearest.u
     node_nearest.iteration += 1
+  '''
 
-
-  # u = random.choice([-tmax,0,tmax]) # Random int. TODO this seems stupid. Must be based on node_rand
-  th, thdot = node_nearest.getStates()
   _, thddot = node_nearest.calcF(u)
 
-  # TODO: RK4
   thNew = th + thdot * node_nearest.dt
   thdotNew = thdot + thddot * node_nearest.dt
-  #thNew = np.arctan2(np.sin(thNew), np.cos(thNew))
 
   return (thNew,thdotNew), u
 
@@ -145,17 +161,28 @@ def steerPendulum(node_nearest, node_rand):
 ###
 def steerPendulumRK4(node_nearest, node_rand):
   '''
+  Purpose:  Use RK4 for accurate integration technique
+            IMPLEMENTED AT 3AM BUT DONT WORK LONGER - NO IDEA WHAT I DID
   :params:  node_nearest is SimplePendulum object
             node_rand is th,thdot values of random sampled point in state space
   '''
   tmax = node_nearest.max_torque
-  if not node_nearest.iteration % 4:
-    u = random.choice([-tmax,0,tmax]) # Random int. TODO this seems stupid. Must be based on node_rand? But works
-  else:
-    u = node_nearest.u
-
-  # u = random.choice([-tmax,0,tmax]) # Random int. TODO this seems stupid. Must be based on node_rand
   x1, x2 = node_nearest.getStates()
+
+  diffTheta =  node_rand[0] - x1
+  diffVel = node_rand[1] - x2
+
+  if diffTheta > 0: # sampled angle is further anti-clockwise
+    if diffVel > 0: # sampled velocity is larger than current
+      u = tmax      # we want to continue this way - add positive torque
+    else: 
+      u = -tmax     # sampled velocity is smaller - we must reduce u
+  else:             # sampled angle is further clockwise
+    if diffVel < 0: # sampled angle has larger velocity anti clockwise
+      u = -tmax     # inflict torque anti clockwise
+    else:
+      u = tmax
+
   thdot, thddot = node_nearest.calcF(u)
   n_n = node_nearest
 
@@ -187,8 +214,8 @@ def plotPhaseplotGoal(ax,path,bounds,iterations):
             iterations: int of number of iterations RRT used
 
   '''
-  plotListOfTuples(ax,path)
-  ax.grid(True)
+  plotListOfTuples(ax,path,width = 4, color = "green")
+  # ax.grid(True)
   ax.set_xlim(bounds[0],bounds[2])
   ax.set_ylim(bounds[1],bounds[3])
   ax.set_xlabel("Theta (rad)")
@@ -213,7 +240,7 @@ def plotPhaseplot(ax,transitions,bounds,portion=1):
     stime =time.time()
     iters = len(transitions)
 
-    ax.grid(True)
+    # ax.grid(True)
     ax.set_xlim(bounds[0],bounds[2])
     ax.set_ylim(bounds[1],bounds[3])
     ax.set_xlabel("Theta (rad)")
@@ -233,6 +260,10 @@ def plotPhaseplot(ax,transitions,bounds,portion=1):
 ###
 ###
 def plotGoalPathParameters(axarr,goalPath):
+  '''
+  Purpose:  Creates plot of theta, angular velocity and inputs
+
+  '''
   axarr[0].set_title('Pendulum parameters')
   thetas = np.array([state[0] for state in goalPath.path])
   dthetas = np.array([state[1] for state in goalPath.path])
@@ -313,22 +344,15 @@ def animatePhaseplot(transitions,bounds):
   print("... Done after", time.time() - stime, "seconds")
 
 
-###
-###
-###
-def printRRT():
-  print(Fore.WHITE + Style.BRIGHT)
-  print('     ____________________________')
-  print('    /                           /\\ ')
-  print('   / '+Fore.RED+'RRT'+Fore.WHITE+' in'+'              /*    / /\\')
-  print('  /  '+Fore.BLUE+'Pyt'+Fore.YELLOW+'hon'+Fore.WHITE+'     _     ___|    / /\\')
-  print(' /           o_/ \___/       / /\\')
-  print('/___________________________/ /\\')
-  print('\___________________________\/\\')
-  print(' \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\'
-        + Style.RESET_ALL + Style.BRIGHT)
-  print(Fore.WHITE+ Style.RESET_ALL)
-
+##############################################
+##############################################
+##############################################
+##############################################
+# ----          Main function           ---- #
+##############################################
+##############################################
+##############################################
+##############################################
 def rrtPendulum(bounds,start_pos,radius,end_regions):
 
   '''
@@ -354,7 +378,6 @@ def rrtPendulum(bounds,start_pos,radius,end_regions):
       n, d = nearestEuclSNode(graph, end_regions[0].centroid.coords[0])
       print("Iteration", i,"\t ### Nearest +pi: ( %0.2f , %0.2f" % (n.state[0], n.state[1]),")")
 
-    # TODO: UNNECESSARY?
     rand_th = random.uniform(bounds[0],bounds[2])
     rand_thdot = random.uniform(bounds[1],bounds[3])
     node_rand = (rand_th,rand_thdot)
@@ -386,14 +409,15 @@ def rrtPendulum(bounds,start_pos,radius,end_regions):
 
 
 ###
-### Initializing 
+### Initializing. Angle is zero in bottom and follows x,y.plane convenstion by increasing anti clockwise
 ###
+
 radius = 0.1
 bounds = (-2*np.pi, -8, 2*np.pi, 8) # interesting plot if bounds are doubled!
 start = (0, 0)
-upright1=[(np.pi*0.9,-0.1), (np.pi*0.9,0.1),(np.pi*1.1,0.1), (np.pi*1.1,-0.1)]
+upright1=[(np.pi*0.95,-0.05), (np.pi*0.95,0.05),(np.pi*1.05,0.05), (np.pi*1.05,-0.05)]
 end1 = Polygon(upright1)
-up2=[(-np.pi*0.9,-0.1), (-np.pi*0.9,0.1),(-np.pi*1.1,0.1), (-np.pi*1.1,-0.1)]
+up2=[(-np.pi*0.95,-0.05), (-np.pi*0.95,0.05),(-np.pi*1.05,0.05), (-np.pi*1.05,-0.05)]
 end2 = Polygon(up2)
 
 # TODO: Decrease both TIMESTEP and the tuning of these endzones
@@ -402,9 +426,14 @@ ends = [end1, end2]
 goalPath, nodes, iters, trans = rrtPendulum(bounds,start,radius,ends)
 
 if PLOTS:
-  fig, axarr = plt.subplots(1,2,sharey=True)
-  plotPhaseplotGoal(axarr[0],goalPath.path,bounds,iters)
-  plotPhaseplot(axarr[1],trans,bounds,portion=1.0) 
+  # fig, axarr = plt.subplots(1,2,sharey=True) # give axarr[0], [1] to plotting
+  fig, ax = plt.subplots()
+  plotPhaseplotGoal(ax,goalPath.path,bounds,iters)
+  plotPhaseplot(ax,trans,bounds,portion=PLOTPORTION)
+
+  plot_poly(ax,Point( (np.pi, 0)).buffer(0.2,resolution=5),'green',alpha=.3)
+  plot_poly(ax,Point( (-np.pi, 0)).buffer(0.2,resolution=5),'green',alpha=.3)
+
   f, axarr1 = plt.subplots(3)
   plotGoalPathParameters(axarr1,goalPath)
 
