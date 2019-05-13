@@ -1,7 +1,10 @@
 # searchClasses.py
 # this file contains the implementation of the search classes used in RRT
 
-from utils import eucl_dist
+from utils import eucl_dist, dotProd, degToRad
+import numpy as np
+import math
+import random
  
 ###
 ### SearchNode class
@@ -259,3 +262,152 @@ class Graph(object):
       else:
         # the node might not have any edges connected to itself as it could be on the edge of a path
         pass
+
+###
+### Ellipse class
+###
+class Ellipse(object):
+  '''
+  A class used to change the sampling distribution over which the RRT star samples after it has found an initial goal. a and b will be the distances from the center of the ellipse out to the maximum in the horizontal and vertical direction, respectively. See https://en.wikipedia.org/wiki/Ellipse#In_Cartesian_coordinates and https://stackoverflow.com/a/46840451/10308389.
+
+  '''
+  def __init__(self, a=1, b=1, pos=(0,0), orientation=0.0):
+    '''
+    If not specified, Ellipse will be a unit circle centered in the origin
+    '''
+    self.a = a 
+    self.b = b
+
+    if a < 0:
+      self.a = -a 
+      print("Ellipse received negative a, setting it to -a")
+    if b < 0:
+      self.b = -b
+      print("Ellipse received negative b, setting it to -b")
+
+    self.pos = pos
+    self.orientation = orientation
+
+  def __eq__(self, other):
+    return self != None and self.a == other.a and self.b == other.b and self.pos == other.pos and self.orientation == other.orientation
+
+  def __repr__(self):
+    return "Ellipse(%r,%r,%r,%r)" % (self.pos, self.a, self.b,self.orientation)
+
+  def getCenterPos(self):
+    return self.pos
+
+  def getOrientation(self):
+    return self.orientation
+
+  ###
+  def generateTheta(self):
+    '''
+    Purpose:  Generate random theta within [-pi/2, 3pi/2]
+    '''
+
+    u = random.random() / 4.0
+    theta = np.arctan(self.b / self.a * np.tan(2*np.pi*u))
+    v = random.random() # [0.,1.)
+    if v < 0.25:
+        return theta
+    elif v < 0.5:
+        return np.pi - theta
+    elif v < 0.75:
+        return np.pi + theta
+    else:
+        return -theta
+
+  ###
+  def getRadius(self,theta):
+    '''
+    Purpose:  Calculate the distance from ellipse center given an angle
+    '''
+    return self.a * self.b / np.sqrt((self.b*np.cos(theta))**2 + (self.a*np.sin(theta))**2)
+
+  def randomPointOrigin(self):
+    '''
+    Purpose:  generates a random point within the ellipse as if centered in the origin
+    '''
+    rand_th = self.generateTheta()
+    max_radius = self.getRadius(rand_th)
+    rand_rad = max_radius * np.sqrt(random.random())
+    return (rand_rad*np.cos(rand_th),rand_rad*np.sin(rand_th))
+
+  def transformPoint(self,x,y):
+    '''
+    Purpose:  Transform point in local coordinate system into global x,y
+    '''
+    # First, skew according to orientation
+    r = math.sqrt(x**2 + y**2)
+    xnew = r * np.cos(self.orientation)
+    ynew = r * np.sin(self.orientation)
+    # Then, skew according to offset from origin
+    xnew += self.pos[0]
+    ynew += self.pos[1]
+    return (xnew,ynew)
+
+  def randomPoint(self):
+    '''
+    Purpose:  Generates a random point within the ellipse considering its orientation and center position
+    '''
+    x,y = self.randomPointOrigin()
+    return self.transformPoint(x,y)
+
+  def generateEllipseParams(self,path):
+    '''
+    Purpose:  Takes in a path (list of (x,y)-tuples, and browses through all its SearchNodes to generate a, b, pos, and orientation for it self
+
+    '''
+    start_pos = path[0]
+    goal_pos = path[-1]
+    dx = goal_pos[0] - start_pos[0]
+    dy = goal_pos[1] - start_pos[1]
+    x_center, y_center = ( (dx)/2 , (dy)/2 )
+
+    alpha = np.arctan2(dy,dx)
+    amax = eucl_dist( start_pos,goal_pos ) / 2
+    bmax = 0
+    # normal vec is chosen to have norm 1 for simplicity
+    normal_vec = [ np.cos(alpha + math.pi/2) , np.sin(alpha + math.pi/2) ]
+    ortho_vec = [ np.cos(alpha + math.pi) , np.sin(alpha + math.pi) ]
+
+    # margin is calculated as np.dot(theta,x) / ||theta||
+    # normal vector gives the distance 
+    for i in range(0,len(path)):
+      margin_a = math.fabs( dotProd(ortho_vec,path[i]) )
+      margin_b = math.fabs( dotProd(normal_vec,path[i]) )
+
+      if margin_b > bmax:
+        bmax = margin_b
+
+      if margin_a > amax:
+        amax = margin_a
+
+    self.a = amax
+    self.b = bmax
+    self.pos = (x_center,y_center)
+    self.orientation = alpha
+
+  def contains(self, point):
+    # TODO: check if point (x,y) is inside ellipse area
+    pass
+
+  def plot(self,ax,color="#BC3E23",increment=1):
+    '''
+    Purpose:  Plots an Ellipse object onto Axes object
+
+    :params:  ax is the Axes object from matplotlib
+              ellipse is the Ellipse object
+    '''
+    xc, yc = self.pos
+    th = self.orientation
+    x = [] ; y = []
+    for deg in range(0,360,increment):
+      radian = degToRad(deg)
+      radius = self.getRadius(radian) 
+      x.append( xc + radius * math.cos(radian + th) )
+      y.append( yc + radius * math.sin(radian + th) )
+
+    ax.plot(x,y,color=color, linewidth=3)
+    #ax.scatter(x,y,color=color,markersize=1)

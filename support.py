@@ -12,30 +12,28 @@ import math
 ###
 def withinBounds(steered_node,bounds):
     return (bounds[0] < steered_node[0] < bounds[2]) and (bounds[1] < steered_node[1] < bounds[3])
+
+
 ###
 ###
 ###
-def getRandomNode(bounds,sampling_rate,iteration,goal_bias,end_region,ellipse=None):
+def getRandomNode(bounds,iteration,goal_bias,bias_rate,end_region,informed=False,ellipse=None):
     '''
     Purpose:    samples random node from within given bounds
 
-    :params:    ellipse is a tuple of ((x1,y1) , (x2,y2) , angle wrt x axis)
+    :params:    ellipse is an Ellipse object
     '''
 
-    if not(iteration % sampling_rate) and (not iteration==0) and (goal_bias):
-        node_rand = end_region.centroid.coords[0]
+    if not(iteration % bias_rate) and (not iteration==0) and (goal_bias):
+        return end_region.centroid.coords[0]
     else:
+      if not ellipse is None and informed:
+        return ellipse.randomPoint()
+      else:
         rand_x = random.uniform(bounds[0],bounds[2])
         rand_y = random.uniform(bounds[1],bounds[3])
-
-        if not ellipse is None: # we have initiated informed RRT - improve sampling procedure
-            pass
-            # TODO: a loop that checks within a ceraint 
-
-        node_rand = (rand_x,rand_y) 
-
-    return node_rand
-
+        return (rand_x,rand_y)
+            
 ###
 ###
 ###
@@ -58,7 +56,8 @@ def steerPath(firstNode,nextNode,dist,eta=0.5):
     vert_dist = nextNode[1] - firstNode[1] #signed
     dist = 2 * dist # originally used to divide hori_dist and vert_dist on
 
-    if False:
+
+    if True:
         if math.sqrt(hori_dist**2 + vert_dist**2) > eta:
             angle = np.arctan2(vert_dist,hori_dist)
             hori_dist = eta * np.cos(angle)
@@ -142,7 +141,7 @@ def steerBicycleWithKinematics(firstNode,theta,nextNode,dt):
     '''
     Purpose:  Steer the kinematic bicycle model from firstNode towards nextNode
 
-    TODO: if delta could be stored, a more realistic implementation would be to constrain delta considering the steering angle already made!
+    If delta could be stored, a more realistic implementation would be to constrain delta considering the steering angle already made!
 
     :params:    firstNode and nextNode is a tuple of x,y pos of back wheel
                 theta is a float of bicycle frame angle wrt. x axis
@@ -161,6 +160,16 @@ def steerBicycleWithKinematics(firstNode,theta,nextNode,dt):
     thetanew    = theta        + dth * dt
     xnew        = firstNode[0] + dx * dt
     ynew        = firstNode[1] + dy * dt
+
+    # TODO: limit distance travelled to eta
+    if False:
+        if math.sqrt(hori_dist**2 + vert_dist**2) > eta:
+            angle = np.arctan2(vert_dist,hori_dist)
+            hori_dist = eta * np.cos(angle)
+            vert_dist = eta * np.sin(angle)
+
+        return (firstNode[0] + hori_dist, firstNode[1] + vert_dist)
+
     
     # map thetanew to (0,2pi)
     return (xnew,ynew), np.mod(thetanew, 2 * np.pi)
@@ -196,7 +205,6 @@ def steerBicycleWithDynamics(firstNode,theta,nextNode,dt,velocity):
     I = scale * Istd
     tire_radius = scale * tire_radius_std
 
-
     # TODO: this should be done by an incremental change to the previous angle to avoid zigzag steering. What needs to be done is to set a max on the rate of change of delta. This means incorporation an extra state, but sould be a very easy fix 
     delta = calculateSteeringAngle(firstNode,theta,nextNode,L,maxx=np.pi/20)
 
@@ -216,8 +224,6 @@ def steerBicycleWithDynamics(firstNode,theta,nextNode,dt,velocity):
     cr = (vy - Lr * b)
     # cr = np.arctan2(np.sin(cr), np.cos(cr))
 
-    # TODO: There angles should be really small
-    # Plan: set forces to be very small, but sign in direction according to delta
     alphaf = np.arctan(cf/vx) - delta # before: this entire set was in arctan
     alphar = np.arctan(cr/vx)
 
@@ -245,9 +251,7 @@ def steerBicycleWithDynamics(firstNode,theta,nextNode,dt,velocity):
     xnew = firstNode[0] + dx * dt
     ynew = firstNode[1] + dy * dt
     
-    #print(dx,dy)
     newstate = (xnew,ynew)
-    # TODO (actually solved): The problem is that the derivatives are usually very small or very big, so either it samples a point very far away, or it samples a point very close. It only add the ones that are very close, and according to the dynamics, they end up in a close path
 
     # map thetanew to (0,2pi)
     return newstate, np.mod(thetanew, 2 * np.pi), (vxnew,vynew,rnew)
@@ -318,7 +322,7 @@ def sampleQuadcopterInputs(searchNode,nextnode,L,m,I,g,u):
 
     # VOILA, we should have our new u1,u2's. As seen from differential flatness, they should be very similar, always
 
-    ## TODO: increase and decrease u1,u2 in relation to previous ones and some kind of maximum rate of change (not realistic to suddenly change u1,u2 to be totally previous)
+    ## Increase and decrease u1,u2 in relation to previous ones and some kind of maximum rate of change (not realistic to suddenly change u1,u2 to be totally previous)
 
     return (u1,u2)
 
@@ -333,7 +337,7 @@ def steerWithQuadcopterDynamics(searchNode, nextNode, dt):
     samples new point reachable during dt from 
 
     '''
-    # TODO: make a function that samples u1,u2 relative to what searchNode had before!!!
+    # Make a function that samples u1,u2 relative to what searchNode had before!!!
 
     L = 0.25     # length of rotor arm
     m = 0.486    # mass of quadrotor
@@ -400,6 +404,11 @@ def goalReached(node,radius,end_region):
 ###
 ###
 def getMaximumNeighborRadius(ETA,no_nodes):
+  '''
+  Purpose:  Implements the maximum radius from [Karaman and Frazzoli, 2013]
+            Note that (log(x) / x)**(0.5) is always lower than 0.61
+
+  '''
   return ETA * math.sqrt(math.log(no_nodes) / no_nodes)
 ###
 ###
@@ -449,6 +458,7 @@ def minCostPath(s_f,k,SN_list,node_min,node_steered,env,r, max_rad=0.2):
 
       if s_f == None:
         cost_near=node_near.cost+eucl_dist(node_near.state,node_steered.state)
+      
       if s_f == False:
         cost_near=node_near.cost+kin_dist(node_near,node_steered)
 
@@ -466,16 +476,44 @@ def minCostPath(s_f,k,SN_list,node_min,node_steered,env,r, max_rad=0.2):
 ###
 ###
 ###
-def rewire(ax, graph, node_min, node_steered, env, radius, SN_list, k, max_r):
+def nodeIsReachable(node_steered,node_near,max_steer):
+  '''
+  Purpose:  Tests to see if node_near is within the range of node_steered
+
+  '''
+  x1,y1 = node_steered.state
+  x2,y2 = node_near.state
+  dx = x2-x1 ; dy = y2 - y1
+  rel_angle = np.arctan2( dy , dx ) # between -pi and pi
+  if rel_angle > max_steer or rel_angle < -max_steer:
+    return False
+
+  return True
+
+###
+###
+###
+def rewire(ax,s_f,graph,node_min,node_steered,env,radius,SN_list,k,max_steer):
   '''
   Purpose:  Rewires graph to remove sub-optimal cost paths for k nearest 
             neighbors
   '''
-  for j in range(1,k):
-    node_near = SN_list[j]
 
+  # SN_list gives all neighbors within max radius. Manipulate the list to only contain reachable nodes according to current body frame angle and max steering angle
+
+
+  for j in range(1,k):
+    node_near = SN_list[j] # gives all neighbors within max radius
     if node_near is not node_min:
+
+      if s_f == False: # if kinematic behavior
+        if not nodeIsReachable(node_steered,node_near,max_steer):
+          continue
+
       if not obstacleIsInPath(node_near.state, node_steered.state,env,radius):
+
+
+
         newcost = node_steered.cost+eucl_dist(node_steered.state,node_near.state)
 
         if newcost < node_near.cost:

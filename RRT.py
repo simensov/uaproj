@@ -11,28 +11,28 @@ from support import * # also importing 'utils' and 'searchClasses'
 ################################
 
 ### Plotting params
-plotAll           = False
+plotAll           = True
 realTimePlotting  = False
 stepThrough       = False
 onePath           = False
+restartRRT        = False
 plotAllFeasible   = False
 noFeas            = 100
 pauseDuration     = 0.001
 rewireDuration    = 0.001
 
 ### Config params
+MAX_ITER          = 1200
 RRTSTAR           = True
-INFORMED          = False 
-# TODO: reduce sample region once goal has been found
-# Create line between start and end to get angle
-# Then, use a "margin"-definition to find the points furthest away in the local coordinate system! Create ellipse based on this
-
-STEERING_FUNCTION = False # None is none, False is kinematic, True is dynamic
+INFORMED          = True
+PATH_BIAS         = False
+PATH_BIAS_RATE    = MAX_ITER #  TODO: bias sampling to be along goal path 
+STEERING_FUNCTION = None # None is none, False is kinematic, True is dynamic
 GOAL_BIAS         = True
 GOAL_BIAS_RATE    = 30
-MAX_ITER          = 5000
 MIN_NEIGH         = 3
 MAX_NEIGH         = 50
+MAX_STEER         = math.pi / 10
 ETA               = 0.5
 DT                = 0.1
 
@@ -55,16 +55,21 @@ def rrt(ax, bounds, env, start_pos, radius, end_region, start_theta=3.14):
     start_node = SearchNode(start_pos,theta=start_theta)
     graph.add_node(start_node)
     goalPath = Path(start_node)
-    bestPath = goalPath
+    bestPath = goalPath # path object
     bestCost = 1000000
     feasible_paths = []
     goalNodes = []
+    info_region = None
+    sampling_rate = GOAL_BIAS_RATE
 
+    print("Looking for path through",MAX_ITER,"iterations")
     for i in range(MAX_ITER):  # random high number
-        print("Iteration no. ", i) if i%(100) == 0 else None
+        printProgressBar(i,MAX_ITER,"Progress",suffix=("/ iteration "+str(i))) if i%(10) == 0 else None
+        
+        node_rand = getRandomNode(bounds,i,GOAL_BIAS,GOAL_BIAS_RATE,end_region,INFORMED,info_region)
 
-        node_rand = getRandomNode(bounds,GOAL_BIAS_RATE,i,GOAL_BIAS,end_region)
         node_nearest, node_dist = nearestEuclSNode(graph, node_rand) 
+
         steered_state,steered_theta,steered_velocity = steeringFunction(STEERING_FUNCTION,node_nearest,node_rand,node_dist,DT,ETA)
 
         if not withinBounds(steered_state,bounds):
@@ -80,9 +85,7 @@ def rrt(ax, bounds, env, start_pos, radius, end_region, start_theta=3.14):
                 nodes.append(node_steered.state)
                 graph.add_node(node_steered)
                 node_min = node_nearest
-
                 no_nodes = len(graph._nodes)
-                print("Nodes:", no_nodes) if not no_nodes % 100 else None
 
                 if RRTSTAR:
                   # limit nearest neighbor search to be 10% of the entire graph
@@ -99,7 +102,7 @@ def rrt(ax, bounds, env, start_pos, radius, end_region, start_theta=3.14):
                     graph.add_edge(node_min,node_steered,rel_dist)
 
                     # Rewiring the remaining neighbors
-                    rewire(ax,graph,node_min,node_steered,env,radius,SN_list,k,max_n_radius)
+                    rewire(ax,STEERING_FUNCTION,graph,node_min,node_steered,env,radius,SN_list,k,MAX_STEER)
 
 
                   else:
@@ -116,8 +119,6 @@ def rrt(ax, bounds, env, start_pos, radius, end_region, start_theta=3.14):
                     plt.draw()
                     plt.pause(0.01)
 
-
-                    
             else:
                 # Avoid goal check if collision is found
                 continue
@@ -132,9 +133,15 @@ def rrt(ax, bounds, env, start_pos, radius, end_region, start_theta=3.14):
             goalNodes.append(node_steered)
             
             if onePath:
+              if INFORMED and plotAll:
+                # just to see what the ellipse is doing - testing plot etc.
+                info_region = Ellipse()
+                info_region.generateEllipseParams(goalPath.path)
+                info_region.plot(ax)
+              
               return goalPath
 
-            else:
+            else: # we allow looking for more paths
 
               if not RRTSTAR:
                 if len(feasible_paths) > noFeas:
@@ -148,18 +155,39 @@ def rrt(ax, bounds, env, start_pos, radius, end_region, start_theta=3.14):
 
               if min(costs) < bestCost:
                 bestCost = min(costs)
-                print("New best cost: %0.3f" % bestCost)
+                bestNode = goalNodes[idx]
 
-              if not RRTSTAR and not onePath:
+                if INFORMED:
+                  info_region = Ellipse()
+                  info_region.generateEllipseParams(bestPath.path)
+                  sampling_rate = 1.1 * sampling_rate # bias less and less
+
+                if plotAll:
+                  plotListOfTuples(ax,bestPath.path)
+
+                  if INFORMED:
+                    # note that the end plot might show the goal path outside of the ellipse. This is just because of the rewiring
+                    info_region.plot(ax)
+
+                  if realTimePlotting:
+                    plt.draw()
+                    plt.pause(0.01)
+
+                print("\nNew best cost: %0.3f" % bestCost + " ")
+                # print("From",bestNode)
+
+              if not RRTSTAR and not onePath and restartRRT:
                 # Restart search and continue as long as the iterations allows
-                nodes = [graphstart_pos]
+                nodes = [start_pos]
                 graph = Graph()
                 graph.add_node(SearchNode(start_pos,theta=start_theta))
                 goalPath = Path(SearchNode(start_pos,theta=start_theta))
 
-    print("Plotting all edges")
-    if plotAll:
-      plotEdges(ax,graph)
+    feasible_paths = [Path(node) for node in goalNodes]
+    costs = [pathObj.cost for pathObj in feasible_paths]
+    idx =  costs.index(min(costs))
+    bestPath = feasible_paths[idx]
+
     return bestPath
 
 ################################
@@ -175,11 +203,13 @@ if(plots):
   radius = 0.3
   xmin = -2; ymin = -3; xmax = 12; ymax = 8
   bounds = (xmin,ymin,xmax,ymax)
-  goal_region = Polygon([(10,5), (10,6), (11,6), (11,5)])
+  # goal_region = Polygon([(10,5), (10,6), (11,6), (11,5)])
 
-  #environment = Environment('env_slit.yaml')
-  environment = Environment('env_empty.yaml')
-  start = (-1, 3)
+  
+  # 16.35 cost is perfect lines
+  environment = Environment('env_superbug.yaml'); start=(0,0) ; s_th=3*np.pi/4
+  environment = Environment('env_slit.yaml');     start=(-1,1); s_th=0
+  #environment = Environment('env_empty.yaml')
   goal_region = Polygon([(11,7), (11,8), (12,8), (12,7)])
   st = time.time()
 
@@ -187,14 +217,13 @@ if(plots):
   ax.set_xlim(xmin,xmax)
   ax.set_ylim(ymin,ymax)
 
-  goalPath=rrt(ax,bounds,environment,start,radius,goal_region,start_theta=0)
+  goalPath=rrt(ax,bounds,environment,start,radius,goal_region,start_theta=s_th)
 
 print("Took", time.time() - st , "seconds. Plotting...")
-
-plot_poly(ax,Point(start).buffer(radius,resolution=5),'blue',alpha=.2)
-plot_poly(ax, goal_region,'red', alpha=0.2)
-plotListOfTuples(ax,goalPath.path)
-ax.set_title("Best cost: "+ str(goalPath.cost))
+plot_poly(ax,Point(start).buffer(radius,resolution=5),'blue',alpha=.3)
+plot_poly(ax, goal_region,'red', alpha=0.3)
+plotListOfTuples(ax,goalPath.path,width=2)
+ax.set_title("Best cost: %0.3f" % goalPath.cost)
 
 q = input("Goal path should be found with cost " + str(goalPath.cost) +"\n Enter 'q' for anything else then plotting goalpath")
 
