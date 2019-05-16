@@ -55,7 +55,7 @@ def plot_environment_on_axes(ax, env, bounds=None, figsize=None):
 
     plt.xlim([minx, maxx])
     plt.ylim([miny, maxy])
-    ax.set_aspect('equal', adjustable='box')
+    #ax.set_aspect('equal', adjustable='box')
 
 def plot_line(ax, line):
     x, y = line.xy

@@ -363,9 +363,11 @@ class Ellipse(object):
     goal_pos = path[-1]
     dx = goal_pos[0] - start_pos[0]
     dy = goal_pos[1] - start_pos[1]
-    x_center, y_center = ( (dx)/2 , (dy)/2 )
-
+    r = math.sqrt(dx**2 + dy**2)
     alpha = np.arctan2(dy,dx)
+
+    x_center,y_center=(start_pos[0]+r/2*math.cos(alpha),start_pos[1]+r/2*math.sin(alpha))
+
     amax = eucl_dist( start_pos,goal_pos ) / 2
     bmax = 0
     # normal vec is chosen to have norm 1 for simplicity
@@ -384,8 +386,8 @@ class Ellipse(object):
       if margin_a > amax:
         amax = margin_a
 
-    self.a = amax
-    self.b = bmax
+    self.a = amax * 0.7
+    self.b = bmax * 1.05
     self.pos = (x_center,y_center)
     self.orientation = alpha
 
@@ -409,5 +411,5 @@ class Ellipse(object):
       x.append( xc + radius * math.cos(radian + th) )
       y.append( yc + radius * math.sin(radian + th) )
 
+    #ax.scatter(xc,yc,color=color)
     ax.plot(x,y,color=color, linewidth=3)
-    #ax.scatter(x,y,color=color,markersize=1)

@@ -89,7 +89,7 @@ def bspline_planning(x, y, sn):
 	N = 3
 	t = range(len(x))
 	x_tup = sinterpol.splrep(t, x, k=N)
-	y_tup = siinterpol.splrep(t, y, k=N)
+	y_tup = sinterpol.splrep(t, y, k=N)
 
 	x_list = list(x_tup)
 	xl = x.tolist()
@@ -133,6 +133,18 @@ def plot_bspline(ax,x,y,bounds,sn=100):
 ###
 ###
 ###
+def plotBsplineFromList(ax,tupleList,bounds,sn=100):
+	x = []; y = []
+	for i in range(len(tupleList)-1):
+		x.append(tupleList[i][0])
+		y.append(tupleList[i][1])
+
+	plot_bspline(ax,x,y,bounds,sn)
+
+
+###
+###
+###
 def plotListOfTuples(ax,tupleList,width=1, color="green"):
 	for i in range(len(tupleList)-1):
 		x = tupleList[i][0], tupleList[i+1][0]
@@ -155,37 +167,54 @@ def printRRT():
 				+ Style.RESET_ALL + Style.BRIGHT)
 	print(Fore.WHITE+ Style.RESET_ALL)
 
+def printRRTstar():
+	print(Fore.WHITE + Style.BRIGHT)
+	print('     ____________________________')
+	print('    /                           /\\ ')
+	print('   / '+Fore.RED+'RRT*'+Fore.WHITE+' in'+'             /*    / /\\')
+	print('  /  '+Fore.BLUE+'Pyt'+Fore.YELLOW+'hon'+Fore.WHITE+'     _     ___|    / /\\')
+	print(' /           o_/ \___/       / /\\')
+	print('/___________________________/ /\\')
+	print('\___________________________\/\\')
+	print(' \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\'
+				+ Style.RESET_ALL + Style.BRIGHT)
+	print(Fore.WHITE+ Style.RESET_ALL)
+
 ###
 ###
 ###
-def plotEdges(ax,graph):
+def plotEdges(ax,graph,color='black',width=1):
 	x = []; y = []
 	for key in graph._edges:
 			edgething = graph._edges[key]
 			for edge in edgething:
 					x1,y1 = edge.source.state
 					x2,y2 = edge.target.state
-					ax.plot( [x1,x2] , [y1,y2] , color='grey', linewidth=0.5)
+					ax.plot( [x1,x2] , [y1,y2] , color=color, linewidth=width)
 
 ###
 ###
 ###
-def plotNodes(ax,graph):
+def plotNodes(ax,graph,color='red', size=5,radius=0.3):
 	for node in graph._nodes:
-			ax.plot([node.state[0]], [node.state[1]], marker='o', markersize=3, color="red")
+		plot_poly(ax,Point((node.state[0], node.state[1])).buffer(radius/3,resolution=5),color="red",alpha=.8)
+			#ax.plot([node.state[0]], [node.state[1]], marker='o', markersize=size, color=color,alpha=0.8)
 
 ###
 ###
 ###
-def drawEdgesLive(ax,environment,bounds,start_pos,end_region,radius,node_steered,new_node,graph,seconds,colorOnOther="green"):
+def drawEdgesLive(ax,environment,radius,node_steered,new_node,graph,bounds = (0,0,1,1), seconds=1,colorOnOther="green",start_pos=(0,0),end_region=(10,10)):
 
-	ax.cla()
+
+	#ax.cla()
+	
 	plotNodes(ax,graph)
 	plot_environment_on_axes(ax,environment,bounds)
-	plot_poly(ax,Point(start_pos).buffer(radius,resolution=5),'blue',alpha=.2)
-	plot_poly(ax, end_region,'red', alpha=0.2)
-	plot_poly(ax,Point(node_steered.state).buffer(radius/2,resolution=5),'blue',alpha=.6)
-	plot_poly(ax,Point(new_node.state).buffer(radius/2,resolution=5),colorOnOther,alpha=.8)
+	#plot_poly(ax,Point(start_pos).buffer(radius,resolution=5),'blue',alpha=.2)
+	#plot_poly(ax, end_region,'red', alpha=0.2)
+	plot_poly(ax,Point(node_steered.state).buffer(0.1,resolution=5),'blue',alpha=.6)
+	plot_poly(ax,Point(new_node.state).buffer(0.1,resolution=5),colorOnOther,alpha=.8)
+
 	plotEdges(ax,graph)
 	plt.draw()
 	plt.pause(seconds)
@@ -201,8 +230,8 @@ def drawEdgesLiveLite(ax,env,radius,node_steered,new_node,graph,color="green"):
 
 	plotNodes(ax,graph)
 	# plot_environment_on_axes(ax,env)
-	plot_poly(ax,Point(node_steered.state).buffer(radius/2,resolution=5),'blue',alpha=.6)
-	plot_poly(ax,Point(new_node.state).buffer(radius/2,resolution=5),color =color,alpha=.8)
+	plot_poly(ax,Point(node_steered.state).buffer(radius/3,resolution=5),'blue',alpha=.6)
+	plot_poly(ax,Point(new_node.state).buffer(radius/3,resolution=5),color =color,alpha=.8)
 
 	plotEdges(ax,graph)
 	ax.set_xlim(left,right)
@@ -235,7 +264,8 @@ def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, bar_len
 	sys.stdout.write('\r%s |%s| %s%s %s' % (prefix, bar, percents,'%',suffix)),
 
 	if iteration == total:
-			sys.stdout.write('\n')
+		sys.stdout.write('\n')
+
 	sys.stdout.flush()
 
 ###

@@ -54,8 +54,7 @@ def steerPath(firstNode,nextNode,dist,eta=0.5):
 
     hori_dist = nextNode[0] - firstNode[0] #signed
     vert_dist = nextNode[1] - firstNode[1] #signed
-    dist = 2 * dist # originally used to divide hori_dist and vert_dist on
-
+    dist = dist/2 # originally used to divide hori_dist and vert_dist on
 
     if True:
         if math.sqrt(hori_dist**2 + vert_dist**2) > eta:
@@ -413,7 +412,7 @@ def getMaximumNeighborRadius(ETA,no_nodes):
 ###
 ###
 ###
-def nearestNeighbors(s_f, graph, newNode, k, ETA, no_nodes, radius=0.2):
+def nearestNeighbors(s_f, graph, newNode, k, ETA, no_nodes, radius=1):
     '''
     Purpose:  find tuple in graph that is closest to newNode
     
@@ -434,7 +433,8 @@ def nearestNeighbors(s_f, graph, newNode, k, ETA, no_nodes, radius=0.2):
         it += 1
 
     X = np.array(states)
-    nbrs = NearestNeighbors(n_neighbors=k, radius=radius, algorithm='ball_tree').fit(X)
+    nbrs=NearestNeighbors(n_neighbors=k,radius=radius,algorithm='ball_tree').fit(X)
+
     distances, indices = nbrs.kneighbors(X)
 
     SN_list = [graph._nodes[ind] for ind in indices[loc_pos]]
@@ -444,39 +444,56 @@ def nearestNeighbors(s_f, graph, newNode, k, ETA, no_nodes, radius=0.2):
 ###
 ### 
 ### 
-def minCostPath(s_f,k,SN_list,node_min,node_steered,env,r, max_rad=0.2):
+def minCostPath(s_f,k,SN_list,node_min,node_steered,env,r, max_rad=1):
   '''
   Purpose:  Finds the node that contributes to the cheapest path out of the 
             k-1 nearest neighbors
 
   '''
-
-  # For all neighbors, add the steered node at the spot where it contributes to the lowest cost. Start counting at 1 since pos 0 is the node itself
-  for j in range(1,k):
-    node_near = SN_list[j]
-    if not obstacleIsInPath(node_near.state, node_steered.state, env,r):
-
-      if s_f == None:
+  if s_f == None:
+    # For all neighbors, add the steered node at the spot where it contributes to the lowest cost. Start counting at 1 since pos 0 is the node itself
+    for j in range(1,k):
+      node_near = SN_list[j]
+      if not obstacleIsInPath(node_near.state, node_steered.state, env,r):
         cost_near=node_near.cost+eucl_dist(node_near.state,node_steered.state)
-      
-      if s_f == False:
+        if cost_near < node_steered.cost:
+          node_min = node_near
+
+    # Update parent and cost accordingly
+    node_steered.parent = node_min
+    relative_distance = eucl_dist(node_min.state,node_steered.state)
+    newcost = node_min.cost + relative_distance
+    node_steered.cost = newcost
+    return node_min, relative_distance
+
+  elif s_f == False:
+    anyReachable = False
+
+    for j in range(1,k):
+      node_near = SN_list[j]
+      if not obstacleIsInPath(node_near.state, node_steered.state,env,r) and nodeIsReachable(node_near,node_steered):
+
+        anyReachable = True
+
         cost_near=node_near.cost+kin_dist(node_near,node_steered)
+        if cost_near < node_steered.cost:
+          node_min = node_near
+    
+    node_steered.parent = node_min
+    relative_distance = kin_dist(node_min,node_steered)
+    newcost = node_min.cost + relative_distance
+    node_steered.cost = newcost
 
-      if cost_near < node_steered.cost:
-        node_min = node_near
+    #if not anyReachable:
+    #  pass # TODO: I believe this is what makes the kinematic goes bonkers: there is no restriction on the initial choice of cheapest path. Rewiring has been confirmed to be ok
+    return node_min, relative_distance, anyReachable
 
-  # Update parent and cost accordingly
-  node_steered.parent = node_min
-  relative_distance = eucl_dist(node_min.state,node_steered.state)
-  newcost = node_min.cost + relative_distance
-  node_steered.cost = newcost
 
-  return node_min, relative_distance
 
 ###
 ###
 ###
-def nodeIsReachable(node_steered,node_near,max_steer):
+def nodeIsReachable(node_steered,node_near,max_steer=math.pi/10):
   '''
   Purpose:  Tests to see if node_near is within the range of node_steered
 
@@ -485,7 +502,7 @@ def nodeIsReachable(node_steered,node_near,max_steer):
   x2,y2 = node_near.state
   dx = x2-x1 ; dy = y2 - y1
   rel_angle = np.arctan2( dy , dx ) # between -pi and pi
-  if rel_angle > max_steer or rel_angle < -max_steer:
+  if rel_angle > max_steer or rel_angle < - max_steer:
     return False
 
   return True
@@ -493,7 +510,7 @@ def nodeIsReachable(node_steered,node_near,max_steer):
 ###
 ###
 ###
-def rewire(ax,s_f,graph,node_min,node_steered,env,radius,SN_list,k,max_steer):
+def rewire(ax,bounds,s_f,graph,node_min,node_steered,env,radius,SN_list,k,max_steer):
   '''
   Purpose:  Rewires graph to remove sub-optimal cost paths for k nearest 
             neighbors
@@ -504,25 +521,59 @@ def rewire(ax,s_f,graph,node_min,node_steered,env,radius,SN_list,k,max_steer):
 
   for j in range(1,k):
     node_near = SN_list[j] # gives all neighbors within max radius
-    if node_near is not node_min:
+    if True or node_near is not node_min:
 
-      if s_f == False: # if kinematic behavior
+      if s_f == False: # kinematic behavior
         if not nodeIsReachable(node_steered,node_near,max_steer):
           continue
 
       if not obstacleIsInPath(node_near.state, node_steered.state,env,radius):
 
-
-
-        newcost = node_steered.cost+eucl_dist(node_steered.state,node_near.state)
+        if s_f == False: # kinematic behavior
+          newcost = node_steered.cost+kin_dist(node_steered,node_near)
+        else: # holonomic behavior
+          newcost = node_steered.cost+eucl_dist(node_steered.state,node_near.state)
 
         if newcost < node_near.cost:
+
+          ###
+
+          if False:
+            plot_poly(ax,Point(node_near.state).buffer(radius/3,resolution=5),color="green",alpha=.9)
+            plt.draw()
+            plt.pause(0.01)
+            print("########\n#######\nREWIRE")
+            input("Enter to continue node_near")
+
           node_parent = node_near.parent
+
+          if False:
+            plot_poly(ax,Point(node_parent.state).buffer(radius/3,resolution=5),color="black",alpha=.9)
+            plt.draw()
+            plt.pause(0.01)
+            input("Enter to continue node_parent")
+
           graph.remove_edge(node_parent,node_near)
           node_near.parent = node_steered
           node_near.cost = newcost
-          dist = eucl_dist(node_steered.state,node_near.state)
-          graph.add_edge(node_steered,node_near,dist)
-          graph.updateEdges(node_near) # the node cost has changed
 
-          #drawEdgesLiveLite(ax,env,radius,node_steered,node_near,graph,color="green")  
+          if s_f == False:
+            dist = kin_dist(node_steered,node_near)
+          else:
+            dist = eucl_dist(node_steered.state,node_near.state)
+
+          graph.add_edge(node_steered,node_near,dist)
+          graph.updateEdges(node_near) # the node cost has changed 
+
+          if False:
+            ax.cla()
+            plot_environment_on_axes(ax, env, bounds)
+            plotEdges(ax,graph)
+            plotNodes(ax,graph,size=8)
+            plot_poly(ax,Point(node_steered.state).buffer(radius/4,resolution=5),color='blue',alpha=.6)
+            plot_poly(ax,Point(node_near.state).buffer(radius/3,resolution=5),color="green",alpha=.9)
+            plt.draw()
+            plt.pause(0.01)
+            input("Enter to continue rewired") 
+
+
