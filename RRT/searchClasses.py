@@ -1,4 +1,4 @@
-# searchClasses.py
+# searchClasses.py - Simen Sem Oevereng
 # this file contains the implementation of the search classes used in RRT
 
 from utils import eucl_dist, dotProd, degToRad
@@ -121,7 +121,7 @@ class Path(object):
             node = node.parent
 
         self.path.reverse()
-        # TODO: self.cost = search_node.cost # not correct if RRT* has rewired
+        # self.cost = search_node.cost # not correct if RRT* has rewired
         self.cost = 0
         for i in range(len(self.path)-1):
             self.cost += eucl_dist(self.path[i], self.path[i+1])
@@ -177,7 +177,6 @@ class Graph(object):
         """
         Purpose:  Adds an edge between node1 and node2.
                   Adds the nodes to the graph first if they don't exist.
-
         """
         self.add_node(node1)
         self.add_node(node2)
@@ -269,7 +268,6 @@ class Graph(object):
 class Ellipse(object):
   '''
   A class used to change the sampling distribution over which the RRT star samples after it has found an initial goal. a and b will be the distances from the center of the ellipse out to the maximum in the horizontal and vertical direction, respectively. See https://en.wikipedia.org/wiki/Ellipse#In_Cartesian_coordinates and https://stackoverflow.com/a/46840451/10308389.
-
   '''
   def __init__(self, a=1, b=1, pos=(0,0), orientation=0.0):
     '''
@@ -305,7 +303,6 @@ class Ellipse(object):
     '''
     Purpose:  Generate random theta within [-pi/2, 3pi/2]
     '''
-
     u = random.random() / 4.0
     theta = np.arctan(self.b / self.a * np.tan(2*np.pi*u))
     v = random.random() # [0.,1.)
@@ -325,6 +322,7 @@ class Ellipse(object):
     '''
     return self.a * self.b / np.sqrt((self.b*np.cos(theta))**2 + (self.a*np.sin(theta))**2)
 
+  ###
   def randomPointOrigin(self):
     '''
     Purpose:  generates a random point within the ellipse as if centered in the origin
@@ -333,7 +331,8 @@ class Ellipse(object):
     max_radius = self.getRadius(rand_th)
     rand_rad = max_radius * np.sqrt(random.random())
     return (rand_rad*np.cos(rand_th),rand_rad*np.sin(rand_th))
-
+  
+  ###
   def transformPoint(self,x,y):
     '''
     Purpose:  Transform point in local coordinate system into global x,y
@@ -346,7 +345,8 @@ class Ellipse(object):
     xnew += self.pos[0]
     ynew += self.pos[1]
     return (xnew,ynew)
-
+  
+  ###
   def randomPoint(self):
     '''
     Purpose:  Generates a random point within the ellipse considering its orientation and center position
@@ -354,6 +354,7 @@ class Ellipse(object):
     x,y = self.randomPointOrigin()
     return self.transformPoint(x,y)
 
+  ###
   def generateEllipseParams(self,path):
     '''
     Purpose:  Takes in a path (list of (x,y)-tuples, and browses through all its SearchNodes to generate a, b, pos, and orientation for it self
@@ -391,10 +392,7 @@ class Ellipse(object):
     self.pos = (x_center,y_center)
     self.orientation = alpha
 
-  def contains(self, point):
-    # TODO: check if point (x,y) is inside ellipse area
-    pass
-
+  ###
   def plot(self,ax,color="#BC3E23",increment=1):
     '''
     Purpose:  Plots an Ellipse object onto Axes object
@@ -411,5 +409,4 @@ class Ellipse(object):
       x.append( xc + radius * math.cos(radian + th) )
       y.append( yc + radius * math.sin(radian + th) )
 
-    #ax.scatter(xc,yc,color=color)
     ax.plot(x,y,color=color, linewidth=3)

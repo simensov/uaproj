@@ -1,9 +1,8 @@
-# support.py
+# support.py - Simen Sem Oevereng
 # this file contains class definitions and calculation functions for the motion planning problems
 
 # Contains general tools for distance calculation and plotting
-from utils import *
-# Contains SearchNode, Graph, Edge, Path classes
+from utils import * # Contains SearchNode, Graph, Edge, Path classes
 from searchClasses import *
 import math
 
@@ -12,7 +11,6 @@ import math
 ###
 def withinBounds(steered_node,bounds):
     return (bounds[0] < steered_node[0] < bounds[2]) and (bounds[1] < steered_node[1] < bounds[3])
-
 
 ###
 ###
@@ -44,8 +42,6 @@ def steerPath(firstNode,nextNode,dist,eta=0.5):
     :params:    tuples as input, dist between them gives ish distance to move
                 eta is a float bounding:
                     eta <= epsilon, where |x1-x2| < eta for all steering |x1 - steer(x1,x2)| < epsilon
-
-
     '''
 
     # avoiding errors when sampling node is too close
@@ -66,8 +62,6 @@ def steerPath(firstNode,nextNode,dist,eta=0.5):
 
     else:
         return (firstNode[0] + hori_dist/dist, firstNode[1] + vert_dist/dist)
-
-
 
 ###
 ### 
@@ -168,7 +162,6 @@ def steerBicycleWithKinematics(firstNode,theta,nextNode,dt):
             vert_dist = eta * np.sin(angle)
 
         return (firstNode[0] + hori_dist, firstNode[1] + vert_dist)
-
     
     # map thetanew to (0,2pi)
     return (xnew,ynew), np.mod(thetanew, 2 * np.pi)
@@ -204,7 +197,6 @@ def steerBicycleWithDynamics(firstNode,theta,nextNode,dt,velocity):
     I = scale * Istd
     tire_radius = scale * tire_radius_std
 
-    # TODO: this should be done by an incremental change to the previous angle to avoid zigzag steering. What needs to be done is to set a max on the rate of change of delta. This means incorporation an extra state, but sould be a very easy fix 
     delta = calculateSteeringAngle(firstNode,theta,nextNode,L,maxx=np.pi/20)
 
     # vx is velocity in direction of theta
@@ -230,7 +222,6 @@ def steerBicycleWithDynamics(firstNode,theta,nextNode,dt,velocity):
     Ff = -(Cf) * alphaf
     Fr = -(Cr) * alphar
 
-
     # euler integration
     dvx = 0 # just for clarity
     #dr = Lr * (Ff * np.cos(delta) - Fr) / I
@@ -239,9 +230,7 @@ def steerBicycleWithDynamics(firstNode,theta,nextNode,dt,velocity):
     dvy = np.tan(delta)*(dvx-r*vy) + (Ff/np.cos(delta) + Fr)/m - vx*r
     
     rnew = dth + dr * dt
-
-    thetanew = theta + rnew * dt # before or after dx,dy calculation?
-    
+    thetanew = theta + rnew * dt
     dx = vx * np.cos(thetanew) - vy * np.sin(thetanew)
     dy = vx * np.sin(thetanew) + vy * np.cos(thetanew)
     
@@ -281,7 +270,6 @@ def steeringFunction(steer_f, node_nearest,node_rand,node_dist,dt,eta=0.5):
 ### 
 def sampleQuadcopterInputs(searchNode,nextnode,L,m,I,g,u):
     '''
-    
     Notes:  Differ between points that are above and below?
             This has to depend on the previous inputs and velocities
 
@@ -291,8 +279,6 @@ def sampleQuadcopterInputs(searchNode,nextnode,L,m,I,g,u):
             
             Make sure that th stays pretty small, indep of vertical movement
             - Extra: so that the dynamics might be linearizable?
-
-    
     '''
 
     pos = searchNode.state
@@ -332,11 +318,8 @@ def steerWithQuadcopterDynamics(searchNode, nextNode, dt):
     '''
     searchNode  is supposed to be nodeNearest as SearchNode object
 
-
-    samples new point reachable during dt from 
-
     '''
-    # Make a function that samples u1,u2 relative to what searchNode had before!!!
+    # TODO: Make a function that samples u1,u2 relative to what searchNode had before
 
     L = 0.25     # length of rotor arm
     m = 0.486    # mass of quadrotor
@@ -484,11 +467,7 @@ def minCostPath(s_f,k,SN_list,node_min,node_steered,env,r, max_rad=1):
     newcost = node_min.cost + relative_distance
     node_steered.cost = newcost
 
-    #if not anyReachable:
-    #  pass # TODO: I believe this is what makes the kinematic goes bonkers: there is no restriction on the initial choice of cheapest path. Rewiring has been confirmed to be ok
     return node_min, relative_distance, anyReachable
-
-
 
 ###
 ###
@@ -496,7 +475,6 @@ def minCostPath(s_f,k,SN_list,node_min,node_steered,env,r, max_rad=1):
 def nodeIsReachable(node_steered,node_near,max_steer=math.pi/10):
   '''
   Purpose:  Tests to see if node_near is within the range of node_steered
-
   '''
   x1,y1 = node_steered.state
   x2,y2 = node_near.state
@@ -518,7 +496,6 @@ def rewire(ax,bounds,s_f,graph,node_min,node_steered,env,radius,SN_list,k,max_st
 
   # SN_list gives all neighbors within max radius. Manipulate the list to only contain reachable nodes according to current body frame angle and max steering angle
 
-
   for j in range(1,k):
     node_near = SN_list[j] # gives all neighbors within max radius
     if True or node_near is not node_min:
@@ -535,24 +512,7 @@ def rewire(ax,bounds,s_f,graph,node_min,node_steered,env,radius,SN_list,k,max_st
           newcost = node_steered.cost+eucl_dist(node_steered.state,node_near.state)
 
         if newcost < node_near.cost:
-
-          ###
-
-          if False:
-            plot_poly(ax,Point(node_near.state).buffer(radius/3,resolution=5),color="green",alpha=.9)
-            plt.draw()
-            plt.pause(0.01)
-            print("########\n#######\nREWIRE")
-            input("Enter to continue node_near")
-
           node_parent = node_near.parent
-
-          if False:
-            plot_poly(ax,Point(node_parent.state).buffer(radius/3,resolution=5),color="black",alpha=.9)
-            plt.draw()
-            plt.pause(0.01)
-            input("Enter to continue node_parent")
-
           graph.remove_edge(node_parent,node_near)
           node_near.parent = node_steered
           node_near.cost = newcost
@@ -564,16 +524,3 @@ def rewire(ax,bounds,s_f,graph,node_min,node_steered,env,radius,SN_list,k,max_st
 
           graph.add_edge(node_steered,node_near,dist)
           graph.updateEdges(node_near) # the node cost has changed 
-
-          if False:
-            ax.cla()
-            plot_environment_on_axes(ax, env, bounds)
-            plotEdges(ax,graph)
-            plotNodes(ax,graph,size=8)
-            plot_poly(ax,Point(node_steered.state).buffer(radius/4,resolution=5),color='blue',alpha=.6)
-            plot_poly(ax,Point(node_near.state).buffer(radius/3,resolution=5),color="green",alpha=.9)
-            plt.draw()
-            plt.pause(0.01)
-            input("Enter to continue rewired") 
-
-

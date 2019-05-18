@@ -4,15 +4,9 @@ Investigated RRT* for motion planning with differential and dynamic constraints,
 
 Another part in the project was done by implementing ideas from "Real-time motion planning for agile autonomous vehicles" (Emilio Frazzoli et. al., 2002), https://ieeexplore.ieee.org/document/945511.
 
-The main goal of the project was to compare these two different methods.
+The main goal of the project was to compare these two different methods. The results of the work was discussed in a final report delivered May 17 2019.
 
 ## File structure:
 
-Run scripts:
- - RRT.py (can be used with bicycle with kinematic and dynamic constraints)
- - DoubleIntegrator2D.py
- - SimplePendulum.py
-
-Other:
-- All files imports support.py, which implements steeringfunctions
-- support.py imports utils and searchClasses, which consists of implementation of plotting tools and classes used for the RRT search
+- RRT contains work aimed at the first paper mentioned above (By Simen Sem Oevereng)
+- DynamicProgramming contains work aimed at the last paper (By Oliver Stugard Os)

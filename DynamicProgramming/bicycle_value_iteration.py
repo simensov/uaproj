@@ -1,3 +1,5 @@
+# bicycle_value_iteration.py - Oliver Stugard Os
+
 import math
 import numpy as np
 import time

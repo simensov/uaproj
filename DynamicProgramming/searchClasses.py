@@ -1,8 +1,8 @@
-# searchClasses.py
+# searchClasses.py - Oliver Stugard Os
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-#These classes are used for the tree that the algorithm holds. Nodes denote states that are added to the tree, edges are trajectories between them. Standard tree functions for removing nodes, edges, adding nodes and edges, in addition to functions that gives the best path to goal, draws the path to goal, and draws the entire tree
+# These classes are used for the tree that the algorithm holds. Nodes denote states that are added to the tree, edges are trajectories between them. Standard tree functions for removing nodes, edges, adding nodes and edges, in addition to functions that gives the best path to goal, draws the path to goal, and draws the entire tree
 
 class Node:
 

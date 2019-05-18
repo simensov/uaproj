@@ -1,3 +1,5 @@
+# my_bicycle.py - Oliver Stugard Os
+
 import math
 import numpy as np
 import matplotlib.pyplot as plt

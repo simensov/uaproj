@@ -1,3 +1,4 @@
+# utils.py - Simen Sem Oevereng
 # this file contains regular utilities for length measurement and plotting etc.
 import yaml
 from sklearn.neighbors import NearestNeighbors
@@ -58,8 +59,6 @@ def nearestEuclSNode(graph, newNode):
 	'''
 	Purpose:    Finds the nearest node in graph of newNode based on eucledian distance in 2D
 	'''
-	# TODO: improve the metric here? Norm seems very naive
-
 	# returning tuple in nodeList that is closest to newNode
 	# nearestNodeInGraph = SearchNode((1,1)) # initialize for return purpose
 	dist = eucl_dist((-10000,-10000),(10000,10000)) # huge distance
@@ -124,9 +123,6 @@ def plot_bspline(ax,x,y,bounds,sn=100):
 	# show results
 	ax.plot(rx, ry, '-r', color='green', linewidth=2, solid_capstyle='round', zorder=1)
 	ax.grid(False)
-	#ax.set_label("Goal path")
-	#ax.legend()
-	# ax.axis("equal")    
 	ax.set_xlim(xmin,xmax)
 	ax.set_ylim(ymin,ymax)
 
@@ -138,9 +134,7 @@ def plotBsplineFromList(ax,tupleList,bounds,sn=100):
 	for i in range(len(tupleList)-1):
 		x.append(tupleList[i][0])
 		y.append(tupleList[i][1])
-
 	plot_bspline(ax,x,y,bounds,sn)
-
 
 ###
 ###
@@ -167,6 +161,9 @@ def printRRT():
 				+ Style.RESET_ALL + Style.BRIGHT)
 	print(Fore.WHITE+ Style.RESET_ALL)
 
+###
+###
+###
 def printRRTstar():
 	print(Fore.WHITE + Style.BRIGHT)
 	print('     ____________________________')
@@ -226,7 +223,6 @@ def drawEdgesLiveLite(ax,env,radius,node_steered,new_node,graph,color="green"):
 	left, right = ax.get_xlim()  # return the current xlim
 	bottom, top = ax.get_ylim()  # return the current xlim
 	ax.cla()
-
 
 	plotNodes(ax,graph)
 	# plot_environment_on_axes(ax,env)
@@ -313,4 +309,3 @@ def plotEllipse(ax,ellipse,color="#BC3E23",increment=1):
 		y.append( yc + radius * math.sin(radian + th) )
 
 	ax.plot(x,y,color=color, linewidth=3)
-	#ax.scatter(x,y,color=color,markersize=1)

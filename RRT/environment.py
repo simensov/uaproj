@@ -1,3 +1,5 @@
+# environment.py - Simen Sem Oevereng (This file was initially a part of the assignments in 16.413 during the Fall 2018 semester. Given by Nikhil Bhargva)
+
 import yaml
 import math
 
