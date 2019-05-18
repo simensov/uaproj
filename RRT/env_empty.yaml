@@ -1,0 +1,9 @@
+environment:
+  obstacles:
+    obstacle0000:
+      corners:
+      - [10, -3]
+      - [9, -3]
+      - [11, -3]
+      - [10, -3.3]
+      shape: polygon
