@@ -1,7 +1,5 @@
-# SimplePendulum.py
+# SimplePendulum.py - Simen Oevereng
 # Implements the swing up procedure for a simple pendulum with damping by using RRT
-
-# Should be good to go unless I want to clean it somewhat
 
 from support import * 
 from numpy import sin,cos
@@ -16,7 +14,6 @@ PLOTS    = True
 ANIMATE  = False
 DAMPING  = True
 PLOTPORTION = 1.0 # 0.0 - 1.0
-
 
 np.random.seed()
 
@@ -142,7 +139,7 @@ def steerPendulum(node_nearest, node_rand):
     else:
       u = tmax
 
-  ''' Old method that made the node_rand samping stupid
+  ''' Old method that made the node_rand sampling in a stupid way
   if not (node_nearest.iteration % 3):
     u = random.choice( [-tmax,0,tmax]) 
     node_nearest.iteration += 1
@@ -302,11 +299,8 @@ def animatePendulum(goalPath):
     ln, = ax.plot([0, sin(sol[i][0])],[0, -cos(sol[i][0])],
                   color='r', lw=2)
 
-    # ln1, = ax.plot([sin(sol[i][0])],[-cos(sol[i][0])], marker='o', markersize=3, color="blue")
-
     tm = ax.text(-1, 0.9, 'time = %.1fs' % ts[i])
     lns.append([ln, tm])
-    #lns.append([ln1,tm])
 
   ax.set_aspect('equal', 'datalim')
   ax.grid()
@@ -323,7 +317,7 @@ def animatePhaseplot(transitions,bounds):
   :params:  transitions: a list of tuples of two lists:
             [ ([x1,x2],[y1,y2]), ([x3,x4],[y3,y4]), ... ]
             bounds: 
-  Note:     Takes long time!
+  Note:     Takes a long time!
   '''
   print("Animating phaseplot...")
   stime = time.time()
@@ -348,19 +342,16 @@ def animatePhaseplot(transitions,bounds):
 
 ##############################################
 ##############################################
-##############################################
-##############################################
 # ----          Main function           ---- #
 ##############################################
 ##############################################
-##############################################
-##############################################
+
 def rrtPendulum(bounds,start_pos,radius,end_regions):
 
   '''
-  - bounds: (minx, miny, maxx, maxy) tuple over region
-  - radius: radius of pendulum head
-  - end_region: end_region is a shapely Polygon that describes the region that the robot needs to reach
+  :params:  bounds: (minx, miny, maxx, maxy) tuple over region
+            radius: radius of pendulum head
+            end_region: end_region is a shapely Polygon that describes the region that the robot needs to reach
   '''
 
   # Using set for now to see unique nodes sampled
@@ -417,11 +408,18 @@ def rrtPendulum(bounds,start_pos,radius,end_regions):
 radius = 0.1
 bounds = (-2*np.pi, -8, 2*np.pi, 8) # interesting plot if bounds are doubled!
 start = (0, 0)
-upright1=[(np.pi*0.95,-0.05), (np.pi*0.95,0.05),(np.pi*1.05,0.05), (np.pi*1.05,-0.05)]
-end1 = Polygon(upright1)
-up2=[(-np.pi*0.95,-0.05), (-np.pi*0.95,0.05),(-np.pi*1.05,0.05), (-np.pi*1.05,-0.05)]
-end2 = Polygon(up2)
+upright1=[(np.pi*0.95,-0.05), 
+          (np.pi*0.95, 0.05),
+          (np.pi*1.05, 0.05), 
+          (np.pi*1.05,-0.05)]
 
+end1 = Polygon(upright1)
+up2=[(-np.pi*0.95,-0.05),
+     (-np.pi*0.95, 0.05),
+     (-np.pi*1.05, 0.05),
+     (-np.pi*1.05,-0.05)]
+
+end2 = Polygon(up2)
 
 ends = [end1, end2]
 goalPath, nodes, iters, trans = rrtPendulum(bounds,start,radius,ends)

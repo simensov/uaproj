@@ -1,13 +1,12 @@
+# RRT.py - Simen Sem Oevereng
+
 from __future__ import division
 import time
-
 from support import * # imports utils and searchClasses as well
 
 ################################
 ################################
-################################
 ########### Globals ############
-################################
 ################################
 ################################
 
@@ -25,9 +24,9 @@ rewireDuration    = 0.001
 ### Config params
 MAX_ITER          = 5000
 RRTSTAR           = False
-INFORMED          = True
+INFORMED          = False
 PATH_BIAS         = False
-PATH_BIAS_RATE    = MAX_ITER #  TODO: bias sampling to be along goal path 
+PATH_BIAS_RATE    = MAX_ITER # Not used for now
 STEERING_FUNCTION = None # None is none, False is kinematic, True is dynamic
 GOAL_BIAS         = True
 GOAL_BIAS_RATE    = 30
@@ -39,9 +38,7 @@ DT                = 0.1
 
 ################################
 ################################
-################################
 ############# RRT ##############
-################################
 ################################
 ################################
 
@@ -49,18 +46,8 @@ def rrt(ax, bounds, env, start_pos, radius, end_region, start_theta=3.14):
 
     # Adding tuples nodes-list -> represent ALL nodes expanded by tree
     nodes = [start_pos]
-
     graph = Graph()
     start_node = SearchNode(start_pos,theta=start_theta)
-
-    ###
-    if plotAll and realTimePlotting and False:
-      plot_poly(ax,Point(start_pos).buffer(radius/3,resolution=5),'red',alpha=.6)
-      plt.draw()
-      plt.pause(0.01)
-      input("Enter")
-
-    ###
     graph.add_node(start_node)
     goalPath = Path(start_node)
     bestPath = goalPath # path object
@@ -73,7 +60,7 @@ def rrt(ax, bounds, env, start_pos, radius, end_region, start_theta=3.14):
     printRRTstar() if RRTSTAR else printRRT()
     print("Looking for path through",MAX_ITER,"iterations")
     for i in range(MAX_ITER):  # random high number
-        printProgressBar(i,MAX_ITER,"Progress",suffix=("/ iteration "+str(i))) #if i%(10) == 0 else None
+        printProgressBar(i,MAX_ITER,"Progress",suffix=("/ iteration "+str(i)))
         
         node_rand = getRandomNode(bounds,i,GOAL_BIAS,GOAL_BIAS_RATE,end_region,INFORMED,info_region)
 
@@ -108,31 +95,10 @@ def rrt(ax, bounds, env, start_pos, radius, end_region, start_theta=3.14):
 
                     node_min,rel_dist,ok = minCostPath(STEERING_FUNCTION,k,SN_list,node_min,node_steered,env,radius)
 
-                    if not ok:
+                    if not ok: # no reachable nodes
                       continue
 
-                    ###
-                    if plotAll and realTimePlotting:
-                      #plot_poly(ax,Point(node_steered.state).buffer(radius/3,resolution=5),color='blue',alpha=.6)
-                      #plot_poly(ax,Point(node_min.state).buffer(radius/3,resolution=5),color="red",alpha=.8)
-                      plt.draw()
-                      plt.pause(0.01)
-                      #input("Enter to continue 1")
-
-                    ###
-
-
                     graph.add_edge(node_min,node_steered,rel_dist)
-
-
-                    ###
-                    if plotAll and realTimePlotting:
-                      #plotNodes(ax,graph)
-                      plotEdges(ax,graph)
-                      plt.draw()
-                      plt.pause(0.01)
-                      #input("Enter to continue 2")
-                    ###
 
                     # Rewiring the remaining neighbors
                     rewire(ax,bounds,STEERING_FUNCTION,graph,node_min,node_steered,env,radius,SN_list,k,MAX_STEER)
@@ -186,7 +152,6 @@ def rrt(ax, bounds, env, start_pos, radius, end_region, start_theta=3.14):
                 info_region = Ellipse()
                 info_region.generateEllipseParams(goalPath.path)
                 info_region.plot(ax)
-                #plotEdges(ax,graph)
 
               return goalPath
 
@@ -223,7 +188,6 @@ def rrt(ax, bounds, env, start_pos, radius, end_region, start_theta=3.14):
                     plt.pause(0.01)
 
                 print("\nNew best cost: %0.3f" % bestCost + " ")
-                # print("From",bestNode)
 
               if not RRTSTAR and not onePath and restartRRT:
                 # Restart search and continue as long as the iterations allows
@@ -245,9 +209,7 @@ def rrt(ax, bounds, env, start_pos, radius, end_region, start_theta=3.14):
 
 ################################
 ################################
-################################
 ############ Tests #############
-################################
 ################################
 ################################
 
@@ -256,14 +218,13 @@ if(plots):
   radius = 0.3
   xmin = -2; ymin = -3; xmax = 12; ymax = 8
   bounds = (xmin,ymin,xmax,ymax)
-  # goal_region = Polygon([(10,5), (10,6), (11,6), (11,5)])
+  goal_region = Polygon([(11,7), (11,8), (12,8), (12,7)])
 
-  
-  # 16.35 cost is perfect lines
+  # cost of 16.35 is perfect lines
   environment = Environment('env_superbug.yaml'); start=(0,0) ; s_th=3*np.pi/4
   #environment = Environment('env_slit.yaml');     start=(-1,1); s_th=0
   #environment = Environment('env_empty.yaml'); start=(-1,1); s_th=0
-  goal_region = Polygon([(11,7), (11,8), (12,8), (12,7)])
+
   
   ax = plot_environment(environment,bounds)
   ax.set_xlim(xmin,xmax) 
@@ -277,7 +238,7 @@ plot_poly(ax,Point(start).buffer(radius,resolution=5),'blue',alpha=.3)
 plot_poly(ax, goal_region,'red', alpha=0.3)
 
 plotListOfTuples(ax,goalPath.path,width=1.5)
-#plotBsplineFromList(ax,goalPath.path,bounds,sn=200)
+#plotBsplineFromList(ax,goalPath.path,bounds,sn=200) # for faster plotting
 
 time_used = DT * len(goalPath.path)
 ax.set_title("Best cost, time: %0.3f units in %0.1f s" % (goalPath.cost, time_used) )
@@ -286,37 +247,3 @@ q = input("Goal path should be found with cost " + str(goalPath.cost) +"\n Enter
 
 plt.close() if q == 'q' else plt.show()
 plt.close()
-
-################################
-########## TODO's ##############
-
-# In the rewiring step, we search for nearest neighbors once. that search output a LIST of objects that has their cost. But if there are more than one object in the list that could get their paths updated, and they are both connected, then the second 
-
-# A weird example that might not actually be feasible. x is new node. the lowest right one is the one in 
-
-# (1) The two 2-nearest neighbors of x is the two to the right. Their distances are stored. 
-# 
-# o -- x    o   
-#  \       /
-#   \     o 
-#    \   /
-#     \ /
-#      o
-
-# (2) The 2-nearest neighbor give the middle one as closest, and rewires that to give it a new cost. But notice that the cost of the rightmost will also have changed here, to the better. 
-#
-# o -- x     o
-#  \    \   /
-#   \     o 
-#    \   
-#     \ 
-#      o
-
-# (3) The rewiring will happen anyways, but the rightmost node was evaluated by its old cost! In this case it was obviously shorter to rewire, but could this not be the case in other cases?
-#
-# o -- x -- o   
-#  \    \ 
-#   \    o 
-#    \   
-#     \ 
-#      o
