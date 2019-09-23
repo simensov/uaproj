@@ -1,4 +1,4 @@
-# 6.832 Underactuated Robotics project, Spring 2019
+# 6.832 Underactuated Robotics project, Spring 2019 :whale:
 
 Investigated RRT* for motion planning with differential and dynamic constraints, inspired by "Sampling-based Optimal Motion Planning for Non-Holonomic Dynamical Systems" (Karaman,  Frazzoli, 2013 - https://ieeexplore.ieee.org/abstract/document/6631297) and "Kinodynamic RRT* - Optimal Motion Planning for Systems with Linear Differential Constraints" (Dustin J. Webb, Jur van den Berg, 2012 - https://arxiv.org/abs/1205.5088v1.)
 
